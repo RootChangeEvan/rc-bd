@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Opportunity Scanner · Root Change</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root {
+    --blue:#2a78d6; --blue-dark:#0C447C; --blue-light:#e6f1fb;
+    --green:#1D9E75; --green-light:#e1f5ee; --amber:#eda100; --amber-light:#fdf3dc; --amber-dark:#7a5300;
+    --red:#c0392b; --red-light:#fbe9e7; --grey:#888780;
+    --text:#1f2328; --muted:#6b6b68; --border:#e3e2de; --bg:#f7f6f3; --card:#fff; --radius:10px;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:var(--bg); color:var(--text); font-size:14px; line-height:1.45; }
+  header { background:#fff; border-bottom:1px solid var(--border); padding:14px 28px; display:flex; align-items:center; gap:24px; position:sticky; top:0; z-index:5; }
+  header h1 { font-size:17px; margin:0; font-weight:650; }
+  header h1 span { color:var(--muted); font-weight:400; }
+  nav { display:flex; gap:4px; }
+  nav button { background:none; border:none; padding:8px 14px; border-radius:8px; font-size:14px; cursor:pointer; color:var(--muted); }
+  nav button.on { background:var(--blue-light); color:var(--blue-dark); font-weight:600; }
+  .hdr-right { margin-left:auto; display:flex; align-items:center; gap:12px; font-size:13px; color:var(--muted); }
+  .hdr-right a { color:var(--blue); text-decoration:none; }
+  main { padding:24px 28px 60px; max-width:1400px; margin:0 auto; }
+  .view { display:none; } .view.on { display:block; }
+  .btn { background:var(--blue); color:#fff; border:none; border-radius:8px; padding:8px 14px; font-size:13px; font-weight:600; cursor:pointer; }
+  .btn:disabled { opacity:.5; cursor:default; }
+  .btn.ghost { background:#fff; color:var(--text); border:1px solid var(--border); font-weight:500; }
+  .btn.small { padding:5px 10px; font-size:12px; }
+  .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:12px; margin-bottom:22px; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:var(--radius); padding:14px 16px; }
+  .card .k { font-size:12px; color:var(--muted); }
+  .card .v { font-size:26px; font-weight:650; margin-top:2px; }
+  .card.click { cursor:pointer; } .card.click:hover { border-color:var(--blue); }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  @media (max-width:900px){ .grid2 { grid-template-columns:1fr; } }
+  .panel { background:var(--card); border:1px solid var(--border); border-radius:var(--radius); padding:16px 18px; margin-bottom:16px; }
+  .panel h2 { font-size:15px; margin:0 0 10px; }
+  table { width:100%; border-collapse:collapse; }
+  th { text-align:left; font-size:12px; color:var(--muted); font-weight:600; padding:8px 8px; border-bottom:1px solid var(--border); white-space:nowrap; }
+  td { padding:9px 8px; border-bottom:1px solid var(--border); vertical-align:top; }
+  tr.row { cursor:pointer; } tr.row:hover td { background:#fafaf8; }
+  .t-title { font-weight:550; }
+  .sub { color:var(--muted); font-size:12px; }
+  .pill { display:inline-block; padding:2px 8px; border-radius:20px; font-size:11.5px; font-weight:600; white-space:nowrap; }
+  .p-active { background:var(--green-light); color:#085041; } .p-upcoming { background:var(--blue-light); color:var(--blue-dark); }
+  .p-potential { background:#eeedfe; color:#26215C; } .p-closed { background:#eee; color:#555; }
+  .p-warn { background:var(--red-light); color:var(--red); } .p-check { background:#f1f0ec; color:#555; }
+  .p-ok { background:var(--green-light); color:#085041; } .p-fail { background:var(--red-light); color:var(--red); } .p-partial { background:var(--amber-light); color:var(--amber-dark); }
+  .p-status { background:var(--amber-light); color:var(--amber-dark); }
+  .filters { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:12px; }
+  select, input[type=text], input[type=email], input[type=number], textarea { font:inherit; font-size:13px; padding:7px 9px; border:1px solid var(--border); border-radius:8px; background:#fff; }
+  textarea { width:100%; resize:vertical; }
+  .count { color:var(--muted); font-size:13px; margin-left:auto; }
+  .empty { color:var(--muted); padding:24px; text-align:center; }
+  /* drawer */
+  .shade { position:fixed; inset:0; background:rgba(0,0,0,.25); display:none; z-index:20; }
+  .shade.on { display:block; }
+  .drawer { position:fixed; top:0; right:0; bottom:0; width:min(720px,96vw); background:#fff; z-index:21; overflow-y:auto; padding:22px 26px 40px; transform:translateX(100%); transition:transform .2s; box-shadow:-8px 0 30px rgba(0,0,0,.08); }
+  .drawer.on { transform:none; }
+  .drawer h2 { font-size:19px; margin:4px 0 6px; }
+  .kv { display:grid; grid-template-columns:150px 1fr; gap:6px 14px; margin:14px 0; font-size:13px; }
+  .kv div:nth-child(odd) { color:var(--muted); }
+  .desc { white-space:pre-wrap; font-size:13px; background:#fafaf8; border:1px solid var(--border); border-radius:8px; padding:12px; max-height:340px; overflow:auto; }
+  .actions { display:flex; flex-wrap:wrap; gap:8px; margin:14px 0; }
+  .close { float:right; background:none; border:none; font-size:22px; cursor:pointer; color:var(--muted); }
+  .note { font-size:12px; color:var(--muted); }
+  /* modal */
+  .modal { position:fixed; inset:0; display:none; align-items:center; justify-content:center; z-index:30; background:rgba(0,0,0,.3); }
+  .modal.on { display:flex; }
+  .modal .box { background:#fff; border-radius:12px; padding:22px 24px; width:min(560px,94vw); max-height:92vh; overflow:auto; }
+  .form { display:grid; grid-template-columns:120px 1fr; gap:10px 12px; align-items:center; margin:14px 0; }
+  .form label { font-size:13px; color:var(--muted); }
+  /* profiles */
+  .prof { background:#fff; border:1px solid var(--border); border-radius:var(--radius); padding:16px 18px; margin-bottom:14px; }
+  .prof-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:12px; margin-top:10px; }
+  .prof-grid label { display:block; font-size:12px; color:var(--muted); margin-bottom:3px; }
+  .prof-grid textarea { min-height:84px; font-size:12.5px; }
+  .chk { display:flex; gap:14px; flex-wrap:wrap; font-size:13px; margin-top:8px; }
+  /* login */
+  #login { max-width:420px; margin:12vh auto; background:#fff; border:1px solid var(--border); border-radius:14px; padding:28px; }
+  #login h1 { font-size:20px; margin:0 0 6px; }
+  #login input { width:100%; margin:14px 0 10px; padding:10px 12px; font-size:14px; }
+  .toast { position:fixed; bottom:22px; left:50%; transform:translateX(-50%); background:#1f2328; color:#fff; padding:10px 18px; border-radius:8px; font-size:13px; display:none; z-index:40; }
+  .toast.on { display:block; }
+</style>
+</head>
+<body>
+
+<div id="login" style="display:none">
+  <h1>Opportunity Scanner</h1>
+  <div class="sub">Root Change · sign in with your rootchange.org email. We'll send you a one-time link.</div>
+  <input type="email" id="login-email" placeholder="you@rootchange.org" autocomplete="email">
+  <button class="btn" id="login-btn" onclick="sendLink()">Email me a sign-in link</button>
+  <div id="login-msg" class="note" style="margin-top:12px"></div>
+</div>
+
+<div id="app" style="display:none">
+<header>
+  <h1>Opportunity Scanner <span>· Root Change</span></h1>
+  <nav>
+    <button data-v="dash" class="on" onclick="show('dash')">Dashboard</button>
+    <button data-v="opps" onclick="show('opps')">Opportunities</button>
+    <button data-v="profiles" onclick="show('profiles')">Profiles</button>
+  </nav>
+  <div class="hdr-right">
+    <a href="./">BD pipeline ↗</a>
+    <span id="who"></span>
+    <a href="#" onclick="signOut();return false;">Sign out</a>
+  </div>
+</header>
+
+<main>
+  <!-- DASHBOARD -->
+  <section class="view on" id="v-dash">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+      <div><div style="font-size:18px;font-weight:650">What the scanner found</div>
+      <div class="sub" id="last-scan">—</div></div>
+      <button class="btn" style="margin-left:auto" id="scan-btn" onclick="scanNow()">Scan now</button>
+    </div>
+    <div class="cards" id="stat-cards"></div>
+    <div class="grid2">
+      <div class="panel"><h2>Closing soonest (matched, open)</h2><div id="closing-list"></div></div>
+      <div class="panel"><h2>Recent changes</h2><div id="changes-list"></div></div>
+    </div>
+    <div class="panel"><h2>Source health</h2><div id="sources-table"></div>
+      <div class="note" style="margin-top:8px">A failed source is shown here, never as zero results. Scheduled scans: Monday and Thursday, about 6:15 a.m. Eastern (USAspending Mondays only).</div></div>
+  </section>
+
+  <!-- OPPORTUNITIES -->
+  <section class="view" id="v-opps">
+    <div class="filters">
+      <input type="text" id="f-q" placeholder="Search title, agency, description" style="width:250px" onkeydown="if(event.key==='Enter')loadOpps()">
+      <select id="f-profile" onchange="loadOpps()"><option value="">All profiles (matched)</option><option value="__all">Everything captured</option></select>
+      <select id="f-source" onchange="loadOpps()"><option value="">All sources</option><option value="grantsgov">Grants.gov</option><option value="sam">SAM.gov</option><option value="usaspending">USAspending (awards)</option></select>
+      <select id="f-stage" onchange="loadOpps()"><option value="open">Open + upcoming + potential</option><option value="active">Active</option><option value="upcoming">Upcoming</option><option value="potential">Potential (awards ending)</option><option value="closed">Closed</option><option value="">Any stage</option></select>
+      <select id="f-deadline" onchange="loadOpps()"><option value="">Any deadline</option><option value="7">Closing in 7 days</option><option value="14">Closing in 14 days</option><option value="30">Closing in 30 days</option><option value="rolling">Rolling</option></select>
+      <select id="f-elig" onchange="loadOpps()"><option value="">Any eligibility</option><option value="check">Check eligibility</option><option value="not_eligible_prime">Not eligible as prime</option></select>
+      <select id="f-review" onchange="loadOpps()"><option value="">Any status</option><option value="new">New</option><option value="reviewing">Reviewing</option><option value="pursue">Pursue</option><option value="pass">Pass</option><option value="in_pipeline">In pipeline</option></select>
+      <label class="sub"><input type="checkbox" id="f-stale" onchange="loadOpps()"> include stale</label>
+      <span class="count" id="opp-count"></span>
+    </div>
+    <div class="panel" style="padding:4px 8px"><div id="opps-table"></div></div>
+  </section>
+
+  <!-- PROFILES -->
+  <section class="view" id="v-profiles">
+    <div style="display:flex;align-items:center;margin-bottom:12px">
+      <div><div style="font-size:18px;font-weight:650">Search profiles</div>
+      <div class="sub">Changes apply at the next scan. Enter one item per line.</div></div>
+      <button class="btn ghost" style="margin-left:auto" onclick="addProfile()">+ Add profile</button>
+    </div>
+    <div id="profiles-list"></div>
+  </section>
+</main>
+</div>
+
+<div class="shade" id="shade" onclick="closeDrawer()"></div>
+<div class="drawer" id="drawer"></div>
+
+<div class="modal" id="pipe-modal"><div class="box">
+  <h2 style="margin:0 0 4px;font-size:18px">Send to BD pipeline</h2>
+  <div class="sub">Creates a row in the BD pipeline dashboard. Edit anything before saving.</div>
+  <div class="form">
+    <label>Name</label><input type="text" id="pp-name">
+    <label>Funder</label><input type="text" id="pp-funder">
+    <label>Portfolio</label><select id="pp-portfolio"><option>Root Change</option><option>Fiscal Sponsorship</option><option>RC Ventures</option></select>
+    <label>Status</label><select id="pp-status"><option>Planned</option><option>In preparation</option><option>Submitted</option></select>
+    <label>Amount ($)</label><input type="number" id="pp-amount" min="0" step="1">
+    <label>Theme</label><select id="pp-theme"><option>Capacity building</option><option>Civic tech / AI</option><option>Climate / environment</option><option>Democracy / governance</option><option>Health equity</option><option>Learning / eval</option><option>Youth / leadership</option><option>Other</option></select>
+    <label>Lead</label><select id="pp-lead"><option>Evan</option><option>Aaron</option><option>Beryl</option><option>Devin</option><option>Nikki</option><option>Wadia</option></select>
+    <label>Probability</label><select id="pp-prob"><option>Low</option><option>Medium</option><option>High</option></select>
+    <label>Notes</label><textarea id="pp-notes" rows="4"></textarea>
+  </div>
+  <div class="actions" style="justify-content:flex-end">
+    <button class="btn ghost" onclick="closePipe()">Cancel</button>
+    <button class="btn" id="pp-save" onclick="savePipe()">Add to pipeline</button>
+  </div>
+</div></div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const SUPABASE_URL = 'https://bgnraddjhuoumvyjwgzj.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_kroBXluUVUoSYYbJNugifQ_Hr5cFANt';
+const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const SOURCES = { grantsgov:'Grants.gov', sam:'SAM.gov', usaspending:'USAspending' };
+const LIST_COLS = 'id,source_id,title,agency_name,top_level_agency,bureau,country_codes,states,geography_text,opportunity_type,stage,deadline,deadline_tz,deadline_rolling,deadline_text,award_ceiling,total_program_funding,value_unknown,eligibility_flag,set_aside,match_profiles,review_status,award_end_date,recipient_name,is_stale,first_seen_at,last_changed_at';
+let profiles = [], session = null, current = null;
+
+// ── helpers ──
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const money = n => n == null ? null : (n >= 1e6 ? '$' + (n/1e6).toFixed(n >= 1e7 ? 0 : 1) + 'M' : n >= 1e3 ? '$' + Math.round(n/1e3) + 'K' : '$' + Math.round(n));
+const fdate = d => d ? new Date(d.length <= 10 ? d + 'T12:00:00' : d).toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' }) : '';
+const ago = d => { if (!d) return 'never'; const h = (Date.now() - Date.parse(d)) / 36e5; return h < 1 ? Math.round(h*60) + ' min ago' : h < 48 ? Math.round(h) + ' h ago' : Math.round(h/24) + ' days ago'; };
+const titleCase = s => String(s ?? '').toLowerCase().replace(/\b([a-z])/g, m => m.toUpperCase());
+function toast(m, ms=3200){ const t=document.getElementById('toast'); t.textContent=m; t.classList.add('on'); clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove('on'), ms); }
+function value(o){ const v = o.award_ceiling ?? o.total_program_funding; return v ? money(Number(v)) : '<span class="sub">Unknown</span>'; }
+function deadline(o){
+  if (o.source_id === 'usaspending') return o.award_end_date ? 'Ends ' + fdate(o.award_end_date) : '—';
+  if (o.deadline_rolling) return 'Rolling';
+  if (o.deadline) { const d = fdate(o.deadline); const days = Math.ceil((Date.parse(o.deadline) - Date.now())/864e5); const soon = days >= 0 && days <= 14 ? ` <span class="pill p-warn">${days}d</span>` : ''; return d + soon + (o.deadline_tz && o.deadline_tz.startsWith('unverified') ? '<div class="sub">time unverified</div>' : ''); }
+  return '<span class="sub">' + esc(o.deadline_text || '—') + '</span>';
+}
+function geo(o){ const g = [...(o.country_codes||[]), ...(o.states||[])].join(', '); return esc(g || o.geography_text || ''); }
+function agency(o){ const top = o.source_id === 'sam' ? titleCase(o.top_level_agency) : (o.top_level_agency || ''); const sub = o.bureau || o.agency_name || ''; return esc(top) + (sub && sub !== top ? '<div class="sub">' + esc(o.source_id==='sam' ? titleCase(sub) : sub) + '</div>' : ''); }
+const stagePill = s => s ? `<span class="pill p-${esc(s)}">${esc(s)}</span>` : '';
+const eligPill = o => o.eligibility_flag === 'not_eligible_prime' ? `<span class="pill p-warn" title="${esc(o.set_aside||'')}">Not eligible as prime</span>` : '';
+const reviewPill = r => r && r !== 'new' ? `<span class="pill p-status">${esc(r.replace('_',' '))}</span>` : '';
+const profNames = ids => (ids||[]).map(id => profiles.find(p => p.id === id)?.name).filter(Boolean);
+
+// ── auth ──
+async function boot(){
+  const { data } = await db.auth.getSession();
+  session = data.session;
+  db.auth.onAuthStateChange((_e, s) => { const was = !!session; session = s; if (!!s !== was) render(); });
+  render();
+}
+function render(){
+  const ok = session && /@rootchange\.org$/i.test(session.user.email || '');
+  document.getElementById('login').style.display = ok ? 'none' : 'block';
+  document.getElementById('app').style.display = ok ? 'block' : 'none';
+  if (session && !ok) { document.getElementById('login-msg').textContent = 'This app is limited to rootchange.org accounts.'; db.auth.signOut(); }
+  if (ok) { document.getElementById('who').textContent = session.user.email; init(); }
+}
+async function sendLink(){
+  const email = document.getElementById('login-email').value.trim();
+  const msg = document.getElementById('login-msg');
+  if (!/@rootchange\.org$/i.test(email)) { msg.textContent = 'Please use your rootchange.org email.'; return; }
+  document.getElementById('login-btn').disabled = true;
+  const { error } = await db.auth.signInWithOtp({ email, options: { emailRedirectTo: location.origin + location.pathname } });
+  document.getElementById('login-btn').disabled = false;
+  msg.textContent = error ? 'Could not send link: ' + error.message : 'Check your inbox for a sign-in link from Supabase.';
+}
+async function signOut(){ await db.auth.signOut(); location.reload(); }
+
+// ── navigation ──
+function show(v){
+  document.querySelectorAll('nav button').forEach(b => b.classList.toggle('on', b.dataset.v === v));
+  document.querySelectorAll('.view').forEach(s => s.classList.toggle('on', s.id === 'v-' + v));
+  if (v === 'opps') loadOpps(); if (v === 'profiles') renderProfiles(); if (v === 'dash') loadDash();
+}
+let started = false;
+async function init(){
+  if (started) return; started = true;
+  await loadProfiles();
+  const sel = document.getElementById('f-profile');
+  profiles.forEach(p => sel.insertAdjacentHTML('beforeend', `<option value="${p.id}">${esc(p.name)}</option>`));
+  loadDash();
+}
+async function loadProfiles(){ const { data } = await db.from('scan_profiles').select('*').order('sort_order'); profiles = data || []; }
+
+// ── dashboard ──
+function matchedOpen(q){ return q.neq('match_profiles', '{}').eq('is_stale', false).in('stage', ['active','upcoming','potential']); }
+async function count(build){ const { count } = await build(db.from('scan_opportunities').select('id', { count:'exact', head:true })); return count ?? 0; }
+async function loadDash(){
+  const now = new Date(), iso = d => new Date(now.getTime() + d*864e5).toISOString();
+  const [nMatched, nNew, n7, n14, n30, nReview, nAwards] = await Promise.all([
+    count(q => matchedOpen(q)),
+    count(q => matchedOpen(q).gte('first_seen_at', iso(-7))),
+    count(q => matchedOpen(q).gte('deadline', iso(0)).lte('deadline', iso(7))),
+    count(q => matchedOpen(q).gte('deadline', iso(0)).lte('deadline', iso(14))),
+    count(q => matchedOpen(q).gte('deadline', iso(0)).lte('deadline', iso(30))),
+    count(q => q.in('review_status', ['reviewing','pursue'])),
+    count(q => matchedOpen(q).eq('source_id','usaspending')),
+  ]);
+  const card = (k, v, f) => `<div class="card ${f?'click':''}" ${f?`onclick="${f}"`:''}><div class="k">${k}</div><div class="v">${v}</div></div>`;
+  document.getElementById('stat-cards').innerHTML =
+    card('Matched & open', nMatched, "jump({})") +
+    card('New in last 7 days', nNew) +
+    card('Closing in 7 / 14 / 30 days', `${n7} / ${n14} / ${n30}`, "jump({deadline:'30'})") +
+    card('Under review / pursue', nReview, "jump({review:'reviewing'})") +
+    card('Awards ending ≤ 18 months', nAwards, "jump({source:'usaspending'})");
+  const { data: soon } = await matchedOpen(db.from('scan_opportunities').select(LIST_COLS)).gte('deadline', iso(0)).order('deadline').limit(8);
+  document.getElementById('closing-list').innerHTML = (soon||[]).length ? `<table>${soon.map(o => `<tr class="row" onclick="openDetail('${o.id}')"><td><div class="t-title">${esc(o.title)}</div><div class="sub">${esc(SOURCES[o.source_id])} · ${agency(o).replace(/<div class="sub">/,' · ').replace('</div>','')}</div></td><td style="white-space:nowrap">${deadline(o)}</td></tr>`).join('')}</table>` : '<div class="empty">Nothing matched is closing soon.</div>';
+  const { data: ch } = await db.from('scan_changes').select('field,old_value,new_value,detected_at,opportunity_id,scan_opportunities(title)').order('detected_at', { ascending:false }).limit(10);
+  document.getElementById('changes-list').innerHTML = (ch||[]).length ? `<table>${ch.map(c => `<tr class="row" onclick="openDetail('${c.opportunity_id}')"><td><div class="t-title">${esc(c.scan_opportunities?.title || '')}</div><div class="sub">${esc(c.field)}: ${esc((c.old_value||'—').slice(0,40))} → ${esc((c.new_value||'—').slice(0,40))}</div></td><td class="sub" style="white-space:nowrap">${ago(c.detected_at)}</td></tr>`).join('')}</table>` : '<div class="empty">No changes detected yet.</div>';
+  const [{ data: srcs }, { data: runs }] = await Promise.all([ db.from('scan_sources').select('*').order('id'), db.from('scan_runs').select('*').order('started_at', { ascending:false }).limit(30) ]);
+  const latest = id => (runs||[]).find(r => r.source_id === id);
+  document.getElementById('sources-table').innerHTML = `<table><tr><th>Source</th><th>Last run</th><th>Result</th><th>Found / new / changed</th><th>Last success</th><th>API calls today</th></tr>${(srcs||[]).map(s => { const r = latest(s.id); const st = r ? r.status : 'never'; const cls = st==='success'?'p-ok':st==='partial'?'p-partial':st==='running'?'p-check':'p-fail'; return `<tr><td><b>${esc(s.name)}</b>${s.enabled?'':' <span class="sub">(off)</span>'}</td><td>${ago(s.last_run_at)}</td><td><span class="pill ${cls}">${esc(st)}</span>${r&&r.error?`<div class="sub" style="max-width:340px">${esc(r.error)}</div>`:''}</td><td>${r?`${r.records_found} / ${r.records_new} / ${r.records_changed}`:'—'}</td><td>${ago(s.last_success_at)}</td><td>${s.daily_call_budget ? `${s.calls_date === new Date().toISOString().slice(0,10) ? s.calls_today : 0} of ${s.daily_call_budget}` : '<span class="sub">no limit</span>'}</td></tr>`; }).join('')}</table>`;
+  const lastOk = (srcs||[]).map(s => s.last_success_at).filter(Boolean).sort().pop();
+  document.getElementById('last-scan').textContent = 'Last successful scan ' + ago(lastOk) + (lastOk ? ' · ' + new Date(lastOk).toLocaleString('en-US', { weekday:'short', month:'short', day:'numeric', hour:'numeric', minute:'2-digit' }) : '');
+}
+function jump(f){
+  ['f-q','f-profile','f-source','f-deadline','f-elig','f-review'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('f-stage').value = 'open';
+  if (f.deadline) document.getElementById('f-deadline').value = f.deadline;
+  if (f.review) document.getElementById('f-review').value = f.review;
+  if (f.source) document.getElementById('f-source').value = f.source;
+  show('opps');
+}
+async function scanNow(){
+  const b = document.getElementById('scan-btn');
+  if (!confirm('Run a scan now? Grants.gov and USAspending take about a minute. SAM.gov uses part of its daily call allowance.')) return;
+  b.disabled = true; b.textContent = 'Scanning…';
+  try {
+    const r = await fetch(SUPABASE_URL + '/functions/v1/scan-orchestrator', { method:'POST', headers: { 'Authorization':'Bearer ' + session.access_token, 'apikey': SUPABASE_KEY, 'Content-Type':'application/json' }, body: '{}' });
+    const j = await r.json();
+    toast(j.ok ? 'Scan finished.' : 'Scan finished with problems — see Source health.', 5000);
+  } catch (e) { toast('Scan request failed: ' + e.message, 5000); }
+  b.disabled = false; b.textContent = 'Scan now'; loadDash();
+}
+
+// ── opportunities ──
+async function loadOpps(){
+  const v = id => document.getElementById(id).value;
+  let q = db.from('scan_opportunities').select(LIST_COLS, { count:'exact' });
+  const prof = v('f-profile');
+  if (prof === '') q = q.neq('match_profiles', '{}'); else if (prof !== '__all') q = q.contains('match_profiles', [prof]);
+  if (v('f-source')) q = q.eq('source_id', v('f-source'));
+  const st = v('f-stage'); if (st === 'open') q = q.in('stage', ['active','upcoming','potential']); else if (st) q = q.eq('stage', st);
+  const dl = v('f-deadline'); if (dl === 'rolling') q = q.eq('deadline_rolling', true); else if (dl) q = q.gte('deadline', new Date().toISOString()).lte('deadline', new Date(Date.now() + dl*864e5).toISOString());
+  if (v('f-elig')) q = q.eq('eligibility_flag', v('f-elig'));
+  if (v('f-review')) q = q.eq('review_status', v('f-review'));
+  if (!document.getElementById('f-stale').checked) q = q.eq('is_stale', false);
+  const text = v('f-q').trim().replace(/[,()%*]/g, ' ');
+  if (text) q = q.or(`title.ilike.*${text}*,agency_name.ilike.*${text}*,recipient_name.ilike.*${text}*,description.ilike.*${text}*`);
+  q = q.order('deadline', { ascending:true, nullsFirst:false }).order('award_end_date', { ascending:true, nullsFirst:false }).limit(500);
+  document.getElementById('opps-table').innerHTML = '<div class="empty">Loading…</div>';
+  const { data, count: n, error } = await q;
+  if (error) { document.getElementById('opps-table').innerHTML = `<div class="empty">Could not load: ${esc(error.message)}</div>`; return; }
+  document.getElementById('opp-count').textContent = `${n ?? 0} ${n === 1 ? 'record' : 'records'}${n > 500 ? ' (first 500 shown)' : ''}`;
+  if (!data.length) { document.getElementById('opps-table').innerHTML = '<div class="empty">No opportunities match these filters.</div>'; return; }
+  document.getElementById('opps-table').innerHTML = `<table><tr><th>Opportunity</th><th>Source</th><th>Agency</th><th>Geography</th><th>Value</th><th>Deadline</th><th>Stage</th><th>Profiles</th></tr>${data.map(o => `<tr class="row" onclick="openDetail('${o.id}')">
+    <td style="max-width:420px"><div class="t-title">${esc(o.title)}</div><div>${eligPill(o)} ${reviewPill(o.review_status)}</div></td>
+    <td>${esc(SOURCES[o.source_id])}<div class="sub">${esc((o.opportunity_type||'').replace(/_/g,' '))}</div></td>
+    <td style="max-width:220px">${agency(o)}</td><td>${geo(o)}</td><td>${value(o)}</td><td style="white-space:nowrap">${deadline(o)}</td><td>${stagePill(o.stage)}</td>
+    <td class="sub" style="max-width:180px">${esc(profNames(o.match_profiles).join(', '))}</td></tr>`).join('')}</table>`;
+}
+
+// ── detail ──
+async function openDetail(id){
+  const [{ data: o }, { data: ch }] = await Promise.all([
+    db.from('scan_opportunities').select('*').eq('id', id).single(),
+    db.from('scan_changes').select('*').eq('opportunity_id', id).order('detected_at', { ascending:false }).limit(50),
+  ]);
+  if (!o) return toast('Could not open this record.');
+  current = o;
+  const amt = (label, v) => `<div>${label}</div><div>${v == null ? '<span class="sub">Unknown</span>' : money(Number(v))}</div>`;
+  const isAward = o.source_id === 'usaspending';
+  document.getElementById('drawer').innerHTML = `
+    <button class="close" onclick="closeDrawer()">×</button>
+    <div class="sub">${esc(SOURCES[o.source_id])} · ${esc((o.opportunity_type||'').replace(/_/g,' '))} ${o.solicitation_number ? '· ' + esc(o.solicitation_number) : ''}</div>
+    <h2>${esc(o.title)}</h2>
+    <div>${stagePill(o.stage)} ${eligPill(o)} ${reviewPill(o.review_status)} ${o.is_stale ? '<span class="pill p-check">stale</span>' : ''} ${o.no_longer_listed ? '<span class="pill p-check">no longer listed</span>' : ''}</div>
+    <div class="actions">
+      ${o.source_url ? `<a class="btn ghost small" href="${esc(o.source_url)}" target="_blank" rel="noopener">Open original ↗</a>` : ''}
+      ${['reviewing','pursue','pass','new'].map(s => `<button class="btn ghost small" onclick="setStatus('${s}')" ${o.review_status===s?'disabled':''}>${s === 'new' ? 'Reset' : s[0].toUpperCase()+s.slice(1)}</button>`).join('')}
+      ${o.pipeline_opportunity_id ? `<span class="pill p-ok" style="align-self:center">In BD pipeline (#${o.pipeline_opportunity_id})</span>` : `<button class="btn small" onclick="openPipe()">Send to pipeline</button>`}
+    </div>
+    <div class="kv">
+      <div>Agency</div><div>${agency(o)}</div>
+      ${isAward ? `<div>Recipient</div><div>${esc(o.recipient_name)} ${o.recipient_uei ? '<span class="sub">UEI ' + esc(o.recipient_uei) + '</span>' : ''}</div><div>Award period</div><div>${fdate(o.award_start_date)} – ${fdate(o.award_end_date)}</div>${amt('Award amount', o.award_ceiling)}` :
+      `<div>Deadline</div><div>${deadline(o)} ${o.deadline_text && !o.deadline_rolling ? '<div class="sub">' + esc(o.deadline_text) + '</div>' : ''}</div>
+      <div>Posted</div><div>${fdate(o.posted_date) || '—'}</div>${amt('Award ceiling', o.award_ceiling)}${amt('Award floor', o.award_floor)}${amt('Total program funding', o.total_program_funding)}
+      <div>Expected awards</div><div>${o.expected_awards ?? '<span class="sub">Unknown</span>'}</div>`}
+      <div>Geography</div><div>${geo(o) || '—'}</div>
+      <div>Assistance listings</div><div>${esc((o.assistance_listings||[]).join(', ') || '—')}</div>
+      ${o.naics_codes?.length ? `<div>NAICS</div><div>${esc(o.naics_codes.join(', '))}</div>` : ''}
+      <div>Eligibility</div><div>${esc(o.eligibility_text || '—')}</div>
+      <div>Matched profiles</div><div>${esc(profNames(o.match_profiles).join(', ') || 'None (captured for the archive)')}</div>
+      <div>First seen / last seen</div><div>${fdate(o.first_seen_at)} / ${fdate(o.last_seen_at)}</div>
+    </div>
+    <h3 style="font-size:14px;margin:18px 0 6px">Description</h3>
+    <div class="desc">${o.description ? esc(o.description) : '<span class="sub">' + (o.source_id === 'sam' ? 'SAM.gov descriptions are not fetched (each costs an API call). Open the original notice.' : 'No description provided.') + '</span>'}</div>
+    <h3 style="font-size:14px;margin:18px 0 6px">Internal notes</h3>
+    <textarea id="d-notes" rows="4" placeholder="Notes for the team">${esc(o.notes || '')}</textarea>
+    <div class="actions"><button class="btn small" onclick="saveNotes()">Save notes</button></div>
+    <h3 style="font-size:14px;margin:18px 0 6px">Change history</h3>
+    ${(ch||[]).length ? `<table>${ch.map(c => `<tr><td class="sub" style="white-space:nowrap">${fdate(c.detected_at)}</td><td><b>${esc(c.field)}</b>: ${esc(c.old_value ?? '—')} → ${esc(c.new_value ?? '—')}</td></tr>`).join('')}</table>` : '<div class="sub">No changes since first seen.</div>'}
+    <details style="margin-top:18px"><summary class="sub">Original source record</summary><pre style="font-size:11px;white-space:pre-wrap;background:#fafaf8;padding:10px;border-radius:8px">${esc(JSON.stringify(o.raw, null, 2))}</pre></details>`;
+  document.getElementById('shade').classList.add('on'); document.getElementById('drawer').classList.add('on');
+}
+function closeDrawer(){ document.getElementById('shade').classList.remove('on'); document.getElementById('drawer').classList.remove('on'); }
+async function setStatus(s){
+  const { error } = await db.from('scan_opportunities').update({ review_status: s, updated_at: new Date().toISOString() }).eq('id', current.id);
+  if (error) return toast('Could not update: ' + error.message);
+  toast('Marked ' + s); openDetail(current.id); if (document.getElementById('v-opps').classList.contains('on')) loadOpps();
+}
+async function saveNotes(){
+  const { error } = await db.from('scan_opportunities').update({ notes: document.getElementById('d-notes').value, updated_at: new Date().toISOString() }).eq('id', current.id);
+  toast(error ? 'Could not save: ' + error.message : 'Notes saved');
+}
+
+// ── send to pipeline ──
+function openPipe(){
+  const o = current, names = profNames(o.match_profiles);
+  const theme = names.some(n => /civil society/i.test(n)) ? 'Democracy / governance' : names.some(n => /systems/i.test(n)) ? 'Capacity building' : names.some(n => /consulting/i.test(n)) ? 'Learning / eval' : 'Other';
+  const top = o.source_id === 'sam' ? titleCase(o.top_level_agency) : (o.top_level_agency || '');
+  const sub = o.bureau || o.agency_name || '';
+  const amount = Number(o.award_ceiling ?? o.total_program_funding ?? 0);
+  const dl = o.deadline_rolling ? 'Rolling' : o.deadline ? fdate(o.deadline) : (o.award_end_date ? 'Award ends ' + fdate(o.award_end_date) : 'not listed');
+  document.getElementById('pp-name').value = o.title.slice(0, 200);
+  document.getElementById('pp-funder').value = top + (sub && sub !== top ? ' — ' + (o.source_id === 'sam' ? titleCase(sub) : sub) : '');
+  document.getElementById('pp-amount').value = Math.min(Math.round(amount), 2000000000);
+  document.getElementById('pp-theme').value = theme;
+  document.getElementById('pp-portfolio').value = 'Root Change'; document.getElementById('pp-status').value = 'Planned';
+  document.getElementById('pp-lead').value = 'Evan'; document.getElementById('pp-prob').value = 'Low';
+  document.getElementById('pp-notes').value = `From Opportunity Scanner (${SOURCES[o.source_id]}). Deadline: ${dl}.${o.solicitation_number ? ' Solicitation: ' + o.solicitation_number + '.' : ''}${amount ? '' : ' Amount unknown.'} ${o.source_url || ''}`.trim();
+  document.getElementById('pipe-modal').classList.add('on');
+}
+function closePipe(){ document.getElementById('pipe-modal').classList.remove('on'); }
+async function savePipe(){
+  const g = id => document.getElementById(id).value;
+  const btn = document.getElementById('pp-save'); btn.disabled = true;
+  const row = { name: g('pp-name'), funder: g('pp-funder'), portfolio: g('pp-portfolio'), status: g('pp-status'), amount: Math.max(0, Math.round(Number(g('pp-amount')) || 0)), theme: g('pp-theme'), lead: g('pp-lead'), prob: g('pp-prob'), notes: g('pp-notes'), decision_date: null, decision_window: '' };
+  const { data, error } = await db.from('opportunities').insert(row).select('id').single();
+  if (error) { btn.disabled = false; return toast('Could not add to pipeline: ' + error.message, 6000); }
+  await db.from('scan_opportunities').update({ pipeline_opportunity_id: data.id, review_status: 'in_pipeline', updated_at: new Date().toISOString() }).eq('id', current.id);
+  await db.from('changelog').insert({ message: 'Added from Opportunity Scanner: ' + row.name });
+  btn.disabled = false; closePipe(); toast('Added to the BD pipeline'); openDetail(current.id);
+}
+
+// ── profiles ──
+const LISTS = [['agency_codes','Agency codes (Grants.gov; prefix match)'],['assistance_listings','Assistance listings'],['naics_codes','NAICS codes'],['countries','Country codes'],['phrases','Phrases (match title + description)'],['negative_phrases','Negative phrases (title)'],['exclude_agencies','Exclude departments (SAM.gov)']];
+function renderProfiles(){
+  document.getElementById('profiles-list').innerHTML = profiles.map(p => `<div class="prof" id="pf-${p.id}">
+    <div style="display:flex;gap:10px;align-items:center"><input type="text" data-k="name" value="${esc(p.name)}" style="font-weight:600;font-size:15px;flex:1">
+      <label class="sub"><input type="checkbox" data-k="active" ${p.active?'checked':''}> active</label>
+      <button class="btn small" onclick="saveProfile('${p.id}')">Save</button></div>
+    <input type="text" data-k="description" value="${esc(p.description||'')}" style="width:100%;margin-top:8px" placeholder="Description">
+    <div class="chk">Sources: ${Object.entries(SOURCES).map(([k,l]) => `<label><input type="checkbox" data-src="${k}" ${(p.sources||[]).includes(k)?'checked':''}> ${l}</label>`).join('')}</div>
+    <div class="prof-grid">${LISTS.map(([k,l]) => `<div><label>${l}</label><textarea data-k="${k}">${esc((p[k]||[]).join('\n'))}</textarea></div>`).join('')}
+      <div><label>Minimum amount ($)</label><input type="number" data-k="min_amount" value="${p.min_amount ?? ''}" style="width:100%">
+        <div class="chk" style="flex-direction:column;gap:6px">
+          <label><input type="checkbox" data-k="include_unknown_amount" ${p.include_unknown_amount?'checked':''}> keep records with unknown amounts</label>
+          <label><input type="checkbox" data-k="phrase_match_any_agency" ${p.phrase_match_any_agency?'checked':''}> phrases match in any agency</label>
+          <label><input type="checkbox" data-k="agency_match_requires_phrase" ${p.agency_match_requires_phrase?'checked':''}> agency match also needs a phrase</label>
+        </div></div>
+    </div></div>`).join('') || '<div class="empty">No profiles yet.</div>';
+}
+async function saveProfile(id){
+  const el = document.getElementById('pf-' + id), f = k => el.querySelector(`[data-k="${k}"]`);
+  const upd = { name: f('name').value.trim(), description: f('description').value.trim(), active: f('active').checked,
+    sources: [...el.querySelectorAll('[data-src]')].filter(c => c.checked).map(c => c.dataset.src),
+    min_amount: f('min_amount').value === '' ? null : Number(f('min_amount').value),
+    include_unknown_amount: f('include_unknown_amount').checked, phrase_match_any_agency: f('phrase_match_any_agency').checked,
+    agency_match_requires_phrase: f('agency_match_requires_phrase').checked, updated_at: new Date().toISOString() };
+  LISTS.forEach(([k]) => upd[k] = f(k).value.split('\n').map(s => s.trim()).filter(Boolean));
+  const { error } = await db.from('scan_profiles').update(upd).eq('id', id);
+  if (error) return toast('Could not save: ' + error.message);
+  await loadProfiles(); toast('Profile saved — applies at the next scan');
+}
+async function addProfile(){
+  const { error } = await db.from('scan_profiles').insert({ name: 'New profile', description: '', sources: ['grantsgov'], sort_order: 100 + profiles.length });
+  if (error) return toast('Could not add: ' + error.message);
+  await loadProfiles(); renderProfiles();
+}
+
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeDrawer(); closePipe(); } });
+boot();
+</script>
+</body>
+</html>
