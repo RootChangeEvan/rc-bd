@@ -2,472 +2,1164 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Opportunity Scanner · Root Change</title>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Root Change · Pipeline Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <style>
   :root {
-    --blue:#2a78d6; --blue-dark:#0C447C; --blue-light:#e6f1fb;
-    --green:#1D9E75; --green-light:#e1f5ee; --amber:#eda100; --amber-light:#fdf3dc; --amber-dark:#7a5300;
-    --red:#c0392b; --red-light:#fbe9e7; --grey:#888780;
-    --text:#1f2328; --muted:#6b6b68; --border:#e3e2de; --bg:#f7f6f3; --card:#fff; --radius:10px;
+    --bg: #f7f6f3; --surface: #ffffff; --surface-alt: #f2f1ee;
+    --border: rgba(0,0,0,0.08); --border-strong: rgba(0,0,0,0.15);
+    --text: #0f0f0e; --text-secondary: #52514e; --text-muted: #898781;
+    --blue: #2a78d6; --blue-light: #e6f1fb; --blue-dark: #0C447C;
+    --green: #0ca30c; --green-light: #eaf3de; --green-dark: #27500A;
+    --amber: #eda100; --amber-light: #faeeda; --amber-dark: #633806;
+    --violet: #4a3aa7; --violet-light: #eeedfe; --violet-dark: #26215C;
+    --coral: #D85A30; --coral-light: #faece7; --coral-dark: #712B13;
+    --gray: #888780; --gray-light: #f1efe8; --gray-dark: #444441;
+    --teal: #1D9E75; --teal-light: #e1f5ee; --teal-dark: #085041;
+    --radius: 8px;
   }
-  * { box-sizing:border-box; }
-  body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:var(--bg); color:var(--text); font-size:14px; line-height:1.45; }
-  header { background:#fff; border-bottom:1px solid var(--border); padding:14px 28px; display:flex; align-items:center; gap:24px; position:sticky; top:0; z-index:5; }
-  header h1 { font-size:17px; margin:0; font-weight:650; }
-  header h1 span { color:var(--muted); font-weight:400; }
-  nav { display:flex; gap:4px; }
-  nav button { background:none; border:none; padding:8px 14px; border-radius:8px; font-size:14px; cursor:pointer; color:var(--muted); }
-  nav button.on { background:var(--blue-light); color:var(--blue-dark); font-weight:600; }
-  .hdr-right { margin-left:auto; display:flex; align-items:center; gap:12px; font-size:13px; color:var(--muted); }
-  .hdr-right a { color:var(--blue); text-decoration:none; }
-  main { padding:24px 28px 60px; max-width:1400px; margin:0 auto; }
-  .view { display:none; } .view.on { display:block; }
-  .btn { background:var(--blue); color:#fff; border:none; border-radius:8px; padding:8px 14px; font-size:13px; font-weight:600; cursor:pointer; }
-  .btn:disabled { opacity:.5; cursor:default; }
-  .btn.ghost { background:#fff; color:var(--text); border:1px solid var(--border); font-weight:500; }
-  .btn.small { padding:5px 10px; font-size:12px; }
-  .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:12px; margin-bottom:22px; }
-  .card { background:var(--card); border:1px solid var(--border); border-radius:var(--radius); padding:14px 16px; }
-  .card .k { font-size:12px; color:var(--muted); }
-  .card .v { font-size:26px; font-weight:650; margin-top:2px; }
-  .card.click { cursor:pointer; } .card.click:hover { border-color:var(--blue); }
-  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
-  @media (max-width:900px){ .grid2 { grid-template-columns:1fr; } }
-  .panel { background:var(--card); border:1px solid var(--border); border-radius:var(--radius); padding:16px 18px; margin-bottom:16px; }
-  .panel h2 { font-size:15px; margin:0 0 10px; }
-  table { width:100%; border-collapse:collapse; }
-  th { text-align:left; font-size:12px; color:var(--muted); font-weight:600; padding:8px 8px; border-bottom:1px solid var(--border); white-space:nowrap; }
-  td { padding:9px 8px; border-bottom:1px solid var(--border); vertical-align:top; }
-  tr.row { cursor:pointer; } tr.row:hover td { background:#fafaf8; }
-  .t-title { font-weight:550; }
-  .sub { color:var(--muted); font-size:12px; }
-  .pill { display:inline-block; padding:2px 8px; border-radius:20px; font-size:11.5px; font-weight:600; white-space:nowrap; }
-  .p-active { background:var(--green-light); color:#085041; } .p-upcoming { background:var(--blue-light); color:var(--blue-dark); }
-  .p-potential { background:#eeedfe; color:#26215C; } .p-closed { background:#eee; color:#555; }
-  .p-warn { background:var(--red-light); color:var(--red); } .p-check { background:#f1f0ec; color:#555; }
-  .p-ok { background:var(--green-light); color:#085041; } .p-fail { background:var(--red-light); color:var(--red); } .p-partial { background:var(--amber-light); color:var(--amber-dark); }
-  .p-status { background:var(--amber-light); color:var(--amber-dark); }
-  .filters { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:12px; }
-  select, input[type=text], input[type=email], input[type=number], textarea { font:inherit; font-size:13px; padding:7px 9px; border:1px solid var(--border); border-radius:8px; background:#fff; }
-  textarea { width:100%; resize:vertical; }
-  .count { color:var(--muted); font-size:13px; margin-left:auto; }
-  .empty { color:var(--muted); padding:24px; text-align:center; }
-  /* drawer */
-  .shade { position:fixed; inset:0; background:rgba(0,0,0,.25); display:none; z-index:20; }
-  .shade.on { display:block; }
-  .drawer { position:fixed; top:0; right:0; bottom:0; width:min(720px,96vw); background:#fff; z-index:21; overflow-y:auto; padding:22px 26px 40px; transform:translateX(100%); transition:transform .2s; box-shadow:-8px 0 30px rgba(0,0,0,.08); }
-  .drawer.on { transform:none; }
-  .drawer h2 { font-size:19px; margin:4px 0 6px; }
-  .kv { display:grid; grid-template-columns:150px 1fr; gap:6px 14px; margin:14px 0; font-size:13px; }
-  .kv div:nth-child(odd) { color:var(--muted); }
-  .desc { white-space:pre-wrap; font-size:13px; background:#fafaf8; border:1px solid var(--border); border-radius:8px; padding:12px; max-height:340px; overflow:auto; }
-  .actions { display:flex; flex-wrap:wrap; gap:8px; margin:14px 0; }
-  .close { float:right; background:none; border:none; font-size:22px; cursor:pointer; color:var(--muted); }
-  .note { font-size:12px; color:var(--muted); }
-  /* modal */
-  .modal { position:fixed; inset:0; display:none; align-items:center; justify-content:center; z-index:30; background:rgba(0,0,0,.3); }
-  .modal.on { display:flex; }
-  .modal .box { background:#fff; border-radius:12px; padding:22px 24px; width:min(560px,94vw); max-height:92vh; overflow:auto; }
-  .form { display:grid; grid-template-columns:120px 1fr; gap:10px 12px; align-items:center; margin:14px 0; }
-  .form label { font-size:13px; color:var(--muted); }
-  /* profiles */
-  .prof { background:#fff; border:1px solid var(--border); border-radius:var(--radius); padding:16px 18px; margin-bottom:14px; }
-  .prof-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:12px; margin-top:10px; }
-  .prof-grid label { display:block; font-size:12px; color:var(--muted); margin-bottom:3px; }
-  .prof-grid textarea { min-height:84px; font-size:12.5px; }
-  .chk { display:flex; gap:14px; flex-wrap:wrap; font-size:13px; margin-top:8px; }
-  /* login */
-  #login { max-width:420px; margin:12vh auto; background:#fff; border:1px solid var(--border); border-radius:14px; padding:28px; }
-  #login h1 { font-size:20px; margin:0 0 6px; }
-  #login input { width:100%; margin:14px 0 10px; padding:10px 12px; font-size:14px; }
-  .toast { position:fixed; bottom:22px; left:50%; transform:translateX(-50%); background:#1f2328; color:#fff; padding:10px 18px; border-radius:8px; font-size:13px; display:none; z-index:40; }
-  .toast.on { display:block; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); font-size: 14px; line-height: 1.5; }
+
+  /* CHANGELOG BANNER */
+  #changelog-banner { display: none; background: var(--surface); border-bottom: 1px solid var(--border); padding: 0; overflow: hidden; }
+  #changelog-banner.visible { display: block; }
+  .banner-inner { max-width: 1200px; margin: 0 auto; padding: 12px 2rem; display: flex; align-items: flex-start; gap: 12px; }
+  .banner-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--blue); flex-shrink: 0; margin-top: 5px; }
+  .banner-content { flex: 1; }
+  .banner-title { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 2px; }
+  .banner-entries { font-size: 12px; color: var(--text-secondary); line-height: 1.6; }
+  .banner-entry { display: flex; align-items: baseline; gap: 6px; }
+  .banner-entry-age { font-size: 11px; color: var(--text-muted); flex-shrink: 0; }
+  .banner-close { background: none; border: none; color: var(--text-muted); font-size: 18px; cursor: pointer; padding: 0 4px; flex-shrink: 0; line-height: 1; margin-top: 1px; }
+  .banner-close:hover { color: var(--text); }
+
+  /* HEADER */
+  header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 2rem; display: flex; align-items: center; justify-content: space-between; height: 56px; position: sticky; top: 0; z-index: 100; }
+  .logo { font-size: 15px; font-weight: 600; letter-spacing: -0.02em; }
+  .logo span { color: var(--blue); }
+  .header-right { display: flex; align-items: center; gap: 16px; }
+  .header-meta { font-size: 12px; color: var(--text-muted); }
+  nav { display: flex; gap: 4px; }
+  nav button { background: none; border: none; padding: 6px 14px; border-radius: var(--radius); font-size: 13px; color: var(--text-secondary); cursor: pointer; font-family: inherit; }
+  nav button:hover { background: var(--surface-alt); }
+  nav button.active { background: var(--blue-light); color: var(--blue-dark); font-weight: 500; }
+
+
+
+  .main { max-width: 1200px; margin: 0 auto; padding: 2rem; }
+
+  /* KPI */
+  .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 1.5rem; }
+  .kpi { background: var(--surface); border-radius: 12px; border: 1px solid var(--border); padding: 1.25rem 1.5rem; }
+  .kpi-label { font-size: 11px; color: var(--text-muted); font-weight: 500; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 6px; }
+  .kpi-value { font-size: 28px; font-weight: 600; letter-spacing: -0.02em; color: var(--text); line-height: 1; }
+  .kpi-sub { font-size: 12px; color: var(--text-secondary); margin-top: 4px; }
+
+  /* PORTFOLIO TILES */
+  .portfolio-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 2rem; }
+  .portfolio-tile { background: var(--surface); border-radius: 12px; border: 1px solid var(--border); padding: 1.25rem 1.5rem; border-top: 3px solid var(--tile-color, #ccc); }
+  .portfolio-tile-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-muted); margin-bottom: 8px; }
+  .portfolio-tile-count { font-size: 24px; font-weight: 600; color: var(--text); line-height: 1; }
+  .portfolio-tile-val { font-size: 13px; color: var(--text-secondary); margin-top: 4px; }
+  .portfolio-tile-stages { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+  .ptile-badge { font-size: 11px; padding: 2px 7px; border-radius: 4px; font-weight: 500; }
+
+  /* LAYOUT */
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 2rem; }
+  .card { background: var(--surface); border-radius: 12px; border: 1px solid var(--border); padding: 1.5rem; }
+  .card-title { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 1.25rem; }
+
+  /* STACKED FUNNEL */
+  .sfunnel { display: flex; flex-direction: column; gap: 10px; }
+  .sfunnel-stage { }
+  .sfunnel-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-muted); margin-bottom: 5px; }
+  .sfunnel-bar-row { display: flex; height: 32px; border-radius: 4px; overflow: hidden; width: 100%; background: var(--surface-alt); }
+  .sfunnel-seg { height: 100%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 500; transition: width 0.5s; overflow: hidden; white-space: nowrap; cursor: pointer; }
+  .sfunnel-seg:hover { filter: brightness(0.93); }
+  .sfunnel-seg:first-child { border-radius: 4px 0 0 4px; }
+  .sfunnel-seg:last-child { border-radius: 0 4px 4px 0; }
+  .sfunnel-seg.only { border-radius: 4px; }
+
+  /* FUNNEL POPOVER */
+  .funnel-popover { position: fixed; z-index: 150; background: var(--surface); border: 1px solid var(--border-strong); border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,0.12); padding: 14px 16px; min-width: 260px; max-width: 340px; pointer-events: none; opacity: 0; transition: opacity 0.15s; }
+  .funnel-popover.visible { opacity: 1; pointer-events: auto; }
+  .funnel-popover-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-muted); margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
+  .funnel-popover-swatch { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
+  .funnel-popover-item { padding: 7px 0; border-bottom: 1px solid var(--border); }
+  .funnel-popover-item:last-child { border-bottom: none; padding-bottom: 0; }
+  .funnel-popover-name { font-size: 13px; font-weight: 500; color: var(--text); line-height: 1.3; }
+  .funnel-popover-meta { font-size: 11px; color: var(--text-muted); margin-top: 2px; display: flex; gap: 8px; flex-wrap: wrap; }
+  .funnel-popover-close { position: absolute; top: 8px; right: 10px; background: none; border: none; font-size: 16px; color: var(--text-muted); cursor: pointer; line-height: 1; pointer-events: auto; }
+  .funnel-popover-close:hover { color: var(--text); }
+  .sfunnel-total { text-align: right; font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+  .sfunnel-legend { display: flex; gap: 14px; margin-top: 14px; flex-wrap: wrap; }
+  .sfunnel-legend-item { display: flex; align-items: center; gap: 5px; font-size: 12px; color: var(--text-secondary); }
+  .sfunnel-swatch { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+
+  /* TABLE */
+  .table-wrap { overflow-x: auto; margin-bottom: 2rem; }
+  table { width: 100%; border-collapse: collapse; background: var(--surface); border-radius: 12px; overflow: hidden; border: 1px solid var(--border); }
+  thead { background: var(--surface-alt); }
+  th { padding: 10px 14px; text-align: left; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); border-bottom: 1px solid var(--border); white-space: nowrap; }
+  td { padding: 11px 14px; font-size: 13px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: var(--surface-alt); }
+  .badge { display: inline-block; padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: 500; white-space: nowrap; }
+  .badge-submitted { background: var(--blue-light); color: var(--blue-dark); }
+  .badge-prep { background: var(--amber-light); color: var(--amber-dark); }
+  .badge-planned { background: var(--gray-light); color: var(--gray-dark); }
+  .badge-won { background: var(--green-light); color: var(--green-dark); }
+  .badge-hold { background: var(--coral-light); color: var(--coral-dark); }
+  .badge-high { background: #eaf3de; color: #27500A; }
+  .badge-medium { background: #faeeda; color: #633806; }
+  .badge-low { background: #f1efe8; color: #444441; }
+
+  /* CLOSED DEALS */
+  .closed-summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 1.25rem; }
+  .closed-stat { background: var(--surface-alt); border-radius: var(--radius); padding: 12px 16px; }
+  .closed-stat-label { font-size: 11px; color: var(--text-muted); font-weight: 500; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px; }
+  .closed-stat-value { font-size: 22px; font-weight: 600; color: var(--text); line-height: 1; }
+  .closed-stat-sub { font-size: 11px; color: var(--text-secondary); margin-top: 2px; }
+  .closed-list { display: flex; flex-direction: column; gap: 6px; }
+  .closed-item { display: flex; align-items: center; gap: 12px; padding: 9px 12px; background: var(--surface-alt); border-radius: var(--radius); border-left: 3px solid var(--border-strong); }
+  .closed-item.won { border-left-color: var(--green); }
+  .closed-item.lost { border-left-color: var(--coral); }
+  .closed-item.deferred { border-left-color: var(--gray); }
+  .closed-item-name { flex: 1; font-size: 13px; font-weight: 500; }
+  .closed-item-funder { font-size: 12px; color: var(--text-secondary); }
+  .closed-item-amount { font-size: 12px; color: var(--text-muted); margin-left: auto; white-space: nowrap; }
+  .closed-empty { font-size: 13px; color: var(--text-muted); padding: 1rem 0; }
+
+  /* FILTERS */
+  .filter-bar { display: flex; gap: 8px; margin-bottom: 1.25rem; flex-wrap: wrap; align-items: center; }
+  .filter-btn { background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--radius); padding: 5px 12px; font-size: 12px; color: var(--text-secondary); cursor: pointer; font-family: inherit; }
+  .filter-btn:hover { background: var(--surface-alt); }
+  .filter-btn.active { background: var(--blue-light); color: var(--blue-dark); border-color: var(--blue); font-weight: 500; }
+  .filter-search { flex: 1; min-width: 180px; border: 1px solid var(--border-strong); border-radius: var(--radius); padding: 5px 12px; font-size: 13px; font-family: inherit; background: var(--surface); color: var(--text); }
+  .filter-search:focus { outline: none; border-color: var(--blue); }
+
+  .chart-container { position: relative; height: 200px; }
+
+  .view { display: none; }
+  .view.active { display: block; }
+
+  /* ADMIN */
+  .admin-bar { background: var(--amber-light); border: 1px solid var(--amber); border-radius: var(--radius); padding: 10px 16px; margin-bottom: 1.5rem; display: flex; align-items: center; justify-content: space-between; }
+  .admin-bar-text { font-size: 13px; color: var(--amber-dark); font-weight: 500; }
+  .btn-primary { background: var(--blue); color: #fff; border: none; border-radius: var(--radius); padding: 7px 16px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit; }
+  .btn-primary:hover { background: var(--blue-dark); }
+  .btn-sm { padding: 4px 10px; font-size: 12px; background: none; border: 1px solid var(--border-strong); border-radius: var(--radius); color: var(--text-secondary); cursor: pointer; font-family: inherit; }
+  .btn-sm:hover { background: var(--surface-alt); }
+
+  /* SUBSCRIBERS SECTION */
+  .sub-section { background: var(--surface); border-radius: 12px; border: 1px solid var(--border); padding: 1.5rem; margin-bottom: 2rem; }
+  .sub-section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+  .sub-section-header h3 { font-size: 13px; font-weight: 600; }
+  .sub-count-badge { font-size: 11px; font-weight: 500; background: var(--blue-light); color: var(--blue-dark); padding: 2px 8px; border-radius: 10px; }
+  .sub-section-desc { font-size: 12px; color: var(--text-secondary); margin-bottom: 1.25rem; }
+  .sub-add-row { display: flex; gap: 8px; margin-bottom: 1.25rem; }
+  .sub-add-row input { flex: 1; border: 1px solid var(--border-strong); border-radius: var(--radius); padding: 8px 12px; font-size: 13px; font-family: inherit; background: var(--surface); color: var(--text); }
+  .sub-add-row input:focus { outline: none; border-color: var(--blue); }
+  .sub-add-row input.success { border-color: var(--green); background: var(--green-light); }
+  .sub-list { display: flex; flex-direction: column; gap: 6px; }
+  .sub-item { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; background: var(--surface-alt); border-radius: var(--radius); font-size: 13px; border: 1px solid transparent; transition: border-color 0.2s; }
+  .sub-item.new-flash { border-color: var(--green); background: var(--green-light); }
+  .sub-item-left { display: flex; align-items: center; gap: 10px; }
+  .sub-avatar { width: 28px; height: 28px; border-radius: 50%; background: var(--blue-light); color: var(--blue-dark); font-size: 11px; font-weight: 600; display: flex; align-items: center; justify-content: center; flex-shrink: 0; text-transform: uppercase; }
+  .sub-item-email { color: var(--text); font-weight: 500; }
+  .sub-item-date { font-size: 11px; color: var(--text-muted); }
+  .sub-item-right { display: flex; align-items: center; gap: 8px; }
+  .sub-empty { font-size: 13px; color: var(--text-muted); text-align: center; padding: 2rem; background: var(--surface-alt); border-radius: var(--radius); border: 1px dashed var(--border-strong); }
+
+  /* MODAL */
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.35); z-index: 200; align-items: center; justify-content: center; }
+  .modal-overlay.open { display: flex; }
+  .modal { background: var(--surface); border-radius: 16px; padding: 2rem; width: 540px; max-width: 95vw; max-height: 90vh; overflow-y: auto; border: 1px solid var(--border); }
+  .modal h3 { font-size: 16px; font-weight: 600; margin-bottom: 1.5rem; }
+  .form-row { margin-bottom: 1rem; }
+  .form-row label { display: block; font-size: 12px; font-weight: 500; color: var(--text-secondary); margin-bottom: 4px; }
+  .form-row input, .form-row select, .form-row textarea { width: 100%; border: 1px solid var(--border-strong); border-radius: var(--radius); padding: 8px 10px; font-size: 13px; font-family: inherit; background: var(--surface); color: var(--text); }
+  .form-row input:focus, .form-row select:focus, .form-row textarea:focus { outline: none; border-color: var(--blue); }
+  .form-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 1.5rem; }
+  .btn-cancel { background: none; border: 1px solid var(--border-strong); border-radius: var(--radius); padding: 7px 16px; font-size: 13px; cursor: pointer; font-family: inherit; color: var(--text-secondary); }
+
+  /* CALENDAR */
+  .calendar-list { display: flex; flex-direction: column; gap: 8px; }
+  .cal-item { display: flex; align-items: center; gap: 12px; padding: 10px 12px; background: var(--surface-alt); border-radius: var(--radius); border-left: 3px solid var(--blue); }
+  .cal-date { font-size: 11px; font-weight: 600; color: var(--text-muted); width: 60px; flex-shrink: 0; text-transform: uppercase; }
+  .cal-name { font-size: 13px; font-weight: 500; }
+  .cal-amount { font-size: 12px; color: var(--text-muted); margin-left: auto; }
+
+  .toast { position: fixed; bottom: 2rem; right: 2rem; background: var(--text); color: #fff; padding: 10px 18px; border-radius: var(--radius); font-size: 13px; opacity: 0; transition: opacity 0.3s; z-index: 300; pointer-events: none; }
+  .toast.show { opacity: 1; }
+
+  .db-status { font-size: 11px; padding: 3px 8px; border-radius: 4px; }
+  .db-ok { background: var(--green-light); color: var(--green-dark); }
+  .db-warn { background: var(--amber-light); color: var(--amber-dark); }
+
+  @media (max-width: 768px) {
+    .kpi-row, .portfolio-row { grid-template-columns: 1fr 1fr; }
+    .two-col { grid-template-columns: 1fr; }
+    header { padding: 0 1rem; flex-wrap: wrap; height: auto; padding: 8px 1rem; gap: 8px; }
+    .subscribe-pill input { width: 120px; }
+    .main { padding: 1rem; }
+  }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+#rc-login{max-width:420px;margin:12vh auto;background:#fff;border:1px solid #e3e2de;border-radius:14px;padding:28px;font-family:inherit}
+#rc-login h1{font-size:20px;margin:0 0 6px}#rc-login input{width:100%;margin:14px 0 10px;padding:10px 12px;font-size:14px;border:1px solid #e3e2de;border-radius:8px;box-sizing:border-box}
+#rc-login button{background:#2a78d6;color:#fff;border:none;border-radius:8px;padding:9px 16px;font-weight:600;cursor:pointer}
+.rc-links{display:flex;gap:12px;font-size:13px}.rc-links a{color:#2a78d6;text-decoration:none}
 </style>
 </head>
 <body>
+<div id="rc-login" style="display:none"><h1>BD Pipeline</h1><div style="color:#6b6b68;font-size:13px">Root Change · sign in with your rootchange.org email. We'll email you a one-time code.</div><input type="email" id="rc-email" placeholder="you@rootchange.org" onkeydown="if(event.key==='Enter')rcSendLink()"><button id="rc-btn" onclick="rcSendLink()">Email me a sign-in code</button><div id="rc-code-step" style="display:none;margin-top:16px"><div style="color:#6b6b68;font-size:13px">Enter the code from the email (check spam if it hasn't arrived).</div><input type="text" id="rc-code" inputmode="numeric" autocomplete="one-time-code" placeholder="123456" onkeydown="if(event.key==='Enter')rcVerify()"><button onclick="rcVerify()">Sign in</button></div><div id="rc-msg" style="margin-top:12px;font-size:12px;color:#6b6b68"></div></div>
+<div id="rc-app" style="display:none">
 
-<div id="login" style="display:none">
-  <h1>Opportunity Scanner</h1>
-  <div class="sub">Root Change · sign in with your rootchange.org email. We'll email you a one-time code.</div>
-  <input type="email" id="login-email" placeholder="you@rootchange.org" autocomplete="email" onkeydown="if(event.key==='Enter')sendLink()">
-  <button class="btn" id="login-btn" onclick="sendLink()">Email me a sign-in code</button>
-  <div id="code-step" style="display:none;margin-top:16px">
-    <div class="sub">Enter the code from the email (check spam if it hasn't arrived).</div>
-    <input type="text" id="login-code" inputmode="numeric" autocomplete="one-time-code" placeholder="123456" onkeydown="if(event.key==='Enter')verifyCode()">
-    <button class="btn" id="code-btn" onclick="verifyCode()">Sign in</button>
+<!-- CHANGELOG BANNER -->
+<div id="changelog-banner">
+  <div class="banner-inner">
+    <div class="banner-dot"></div>
+    <div class="banner-content">
+      <div class="banner-title">Recent updates</div>
+      <div class="banner-entries" id="banner-entries"></div>
+    </div>
+    <button class="banner-close" onclick="dismissBanner()" title="Dismiss">×</button>
   </div>
-  <div id="login-msg" class="note" style="margin-top:12px"></div>
 </div>
 
-<div id="app" style="display:none">
 <header>
-  <h1>Opportunity Scanner <span>· Root Change</span></h1>
+  <div class="logo">Root <span>Change</span> · Pipeline</div>
   <nav>
-    <button data-v="dash" class="on" onclick="show('dash')">Dashboard</button>
-    <button data-v="opps" onclick="show('opps')">Opportunities</button>
-    <button data-v="profiles" onclick="show('profiles')">Profiles</button>
+    <button class="active" onclick="showView('dashboard', this)">Dashboard</button>
+    <button onclick="showView('opportunities', this)">All opportunities</button>
+    <button onclick="showView('admin', this)" style="color:var(--amber-dark);">Admin ↗</button>
   </nav>
-  <div class="hdr-right">
-    <a href="./">BD pipeline ↗</a>
-    <span id="who"></span>
-    <a href="#" onclick="signOut();return false;">Sign out</a>
+  <div class="header-right">
+    <span class="db-status" id="db-status">connecting…</span>
+    <div class="header-meta" id="header-meta"></div>
+    <div class="rc-links"><a href="scanner.html">Opportunity Scanner ↗</a><span id="rc-who" style="color:#6b6b68"></span><a href="#" onclick="rcSignOut();return false;">Sign out</a></div>
   </div>
 </header>
 
-<main>
-  <!-- DASHBOARD -->
-  <section class="view on" id="v-dash">
-    <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
-      <div><div style="font-size:18px;font-weight:650">What the scanner found</div>
-      <div class="sub" id="last-scan">—</div></div>
-      <button class="btn" style="margin-left:auto" id="scan-btn" onclick="scanNow()">Scan now</button>
-    </div>
-    <div class="cards" id="stat-cards"></div>
-    <div class="grid2">
-      <div class="panel"><h2>Closing soonest (matched, open)</h2><div id="closing-list"></div></div>
-      <div class="panel"><h2>Recent changes</h2><div id="changes-list"></div></div>
-    </div>
-    <div class="panel"><h2>Source health</h2><div id="sources-table"></div>
-      <div class="note" style="margin-top:8px">A failed source is shown here, never as zero results. Scheduled scans: Monday and Thursday, about 6:15 a.m. Eastern (USAspending Mondays only).</div></div>
-  </section>
+<div class="main">
 
-  <!-- OPPORTUNITIES -->
-  <section class="view" id="v-opps">
-    <div class="filters">
-      <input type="text" id="f-q" placeholder="Search title, agency, description" style="width:250px" onkeydown="if(event.key==='Enter')loadOpps()">
-      <select id="f-profile" onchange="loadOpps()"><option value="">All profiles (matched)</option><option value="__all">Everything captured</option></select>
-      <select id="f-source" onchange="loadOpps()"><option value="">All sources</option><option value="grantsgov">Grants.gov</option><option value="sam">SAM.gov</option><option value="usaspending">USAspending (awards)</option></select>
-      <select id="f-stage" onchange="loadOpps()"><option value="open">Open + upcoming + potential</option><option value="active">Active</option><option value="upcoming">Upcoming</option><option value="potential">Potential (awards ending)</option><option value="closed">Closed</option><option value="">Any stage</option></select>
-      <select id="f-deadline" onchange="loadOpps()"><option value="">Any deadline</option><option value="7">Closing in 7 days</option><option value="14">Closing in 14 days</option><option value="30">Closing in 30 days</option><option value="rolling">Rolling</option></select>
-      <select id="f-elig" onchange="loadOpps()"><option value="">Any eligibility</option><option value="check">Check eligibility</option><option value="not_eligible_prime">Not eligible as prime</option></select>
-      <select id="f-review" onchange="loadOpps()"><option value="">Any status</option><option value="new">New</option><option value="reviewing">Reviewing</option><option value="pursue">Pursue</option><option value="pass">Pass</option><option value="in_pipeline">In pipeline</option></select>
-      <label class="sub"><input type="checkbox" id="f-stale" onchange="loadOpps()"> include stale</label>
-      <span class="count" id="opp-count"></span>
+  <div id="view-dashboard" class="view active">
+    <div class="kpi-row" id="kpi-row"></div>
+    <div class="portfolio-row" id="portfolio-row"></div>
+    <div class="two-col">
+      <div class="card">
+        <div class="card-title">Pipeline by stage · by portfolio</div>
+        <div class="sfunnel" id="sfunnel"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Known value by stage</div>
+        <div class="chart-container">
+          <canvas id="valueChart" role="img" aria-label="Bar chart of pipeline value by stage">Value by stage.</canvas>
+        </div>
+      </div>
     </div>
-    <div class="panel" style="padding:4px 8px"><div id="opps-table"></div></div>
-  </section>
+    <div class="two-col">
+      <div class="card">
+        <div class="card-title">Upcoming decisions</div>
+        <div class="calendar-list" id="cal-list"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">By theme</div>
+        <div class="chart-container">
+          <canvas id="themeChart" role="img" aria-label="Donut chart by theme">By theme.</canvas>
+        </div>
+      </div>
+    </div>
+    <div class="card" style="margin-bottom:2rem;">
+      <div class="card-title" id="closed-title">Closed deals</div>
+      <div id="closed-section"></div>
+    </div>
+  </div>
 
-  <!-- PROFILES -->
-  <section class="view" id="v-profiles">
-    <div style="display:flex;align-items:center;margin-bottom:12px">
-      <div><div style="font-size:18px;font-weight:650">Search profiles</div>
-      <div class="sub">Changes apply at the next scan. Enter one item per line.</div></div>
-      <button class="btn ghost" style="margin-left:auto" onclick="addProfile()">+ Add profile</button>
+  <div id="view-opportunities" class="view">
+    <div class="filter-bar">
+      <input class="filter-search" type="text" placeholder="Search…" id="search-input" oninput="renderTable()">
+      <button class="filter-btn active" onclick="setFilter('all', this)">All</button>
+      <button class="filter-btn" onclick="setFilter('Submitted', this)">Submitted</button>
+      <button class="filter-btn" onclick="setFilter('In preparation', this)">In prep</button>
+      <button class="filter-btn" onclick="setFilter('Planned', this)">Planned</button>
+      <button class="filter-btn" onclick="setFilter('Won', this)">Won</button>
+      <button class="filter-btn" onclick="setFilter('Lost', this)">Lost</button>
+      <button class="filter-btn" onclick="setFilter('Deferred', this)">Deferred</button>
+      <button class="filter-btn" onclick="setPortfolioFilter('Fiscal Sponsorship', this)">Fiscal Sponsorship</button>
+      <button class="filter-btn" onclick="setPortfolioFilter('RC Ventures', this)">RC Ventures</button>
     </div>
-    <div id="profiles-list"></div>
-  </section>
-</main>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Opportunity</th><th>Funder</th><th>Portfolio</th><th>Status</th><th>Amount</th><th>Prob</th><th>Lead</th><th>Support</th><th>Decision</th><th>Theme</th></tr></thead>
+        <tbody id="opp-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div id="view-admin" class="view">
+    <div class="admin-bar">
+      <div class="admin-bar-text">⚡ Admin mode — changes notify subscribers and appear in the banner</div>
+      <button class="btn-primary" onclick="openModal()">+ Add opportunity</button>
+    </div>
+
+    <div class="sub-section">
+      <div class="sub-section-header">
+        <h3>Email notifications</h3>
+        <span class="sub-count-badge" id="sub-count-badge">0 subscribers</span>
+      </div>
+      <p class="sub-section-desc">Everyone on this list gets an email when an opportunity is added, updated, or removed.</p>
+      <div class="sub-add-row">
+        <input type="email" id="sub-add-input" placeholder="Enter email address to add…" onkeydown="if(event.key==='Enter')addSubscriber()">
+        <button class="btn-primary" onclick="addSubscriber()">+ Add subscriber</button>
+      </div>
+      <div class="sub-list" id="sub-list">
+        <div class="sub-empty">Loading subscribers…</div>
+      </div>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Opportunity</th><th>Funder</th><th>Portfolio</th><th>Status</th><th>Prob</th><th>Lead</th><th>Support</th><th>Amount</th><th>Decision</th><th>Notes</th><th>Actions</th></tr></thead>
+        <tbody id="admin-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
 </div>
 
-<div class="shade" id="shade" onclick="closeDrawer()"></div>
-<div class="drawer" id="drawer"></div>
-
-<div class="modal" id="pipe-modal"><div class="box">
-  <h2 style="margin:0 0 4px;font-size:18px">Send to BD pipeline</h2>
-  <div class="sub">Creates a row in the BD pipeline dashboard. Edit anything before saving.</div>
-  <div class="form">
-    <label>Name</label><input type="text" id="pp-name">
-    <label>Funder</label><input type="text" id="pp-funder">
-    <label>Portfolio</label><select id="pp-portfolio"><option>Root Change</option><option>Fiscal Sponsorship</option><option>RC Ventures</option></select>
-    <label>Status</label><select id="pp-status"><option>Planned</option><option>In preparation</option><option>Submitted</option></select>
-    <label>Amount ($)</label><input type="number" id="pp-amount" min="0" step="1">
-    <label>Theme</label><select id="pp-theme"><option>Capacity building</option><option>Civic tech / AI</option><option>Climate / environment</option><option>Democracy / governance</option><option>Health equity</option><option>Learning / eval</option><option>Youth / leadership</option><option>Other</option></select>
-    <label>Lead</label><select id="pp-lead"><option>Evan</option><option>Aaron</option><option>Beryl</option><option>Devin</option><option>Nikki</option><option>Wadia</option></select>
-    <label>Probability</label><select id="pp-prob"><option>Low</option><option>Medium</option><option>High</option></select>
-    <label>Notes</label><textarea id="pp-notes" rows="4"></textarea>
+<!-- OPP MODAL -->
+<div class="modal-overlay" id="modal">
+  <div class="modal">
+    <h3 id="modal-title">Add opportunity</h3>
+    <div class="form-row">
+      <label>Opportunity description</label>
+      <input type="text" id="f-name" placeholder="e.g. Health Equity Platform">
+    </div>
+    <div class="form-2col">
+      <div class="form-row">
+        <label>Funder / client</label>
+        <input type="text" id="f-funder" placeholder="e.g. Google.org">
+      </div>
+      <div class="form-row">
+        <label>Portfolio</label>
+        <select id="f-portfolio">
+          <option>Root Change</option>
+          <option>Fiscal Sponsorship</option>
+          <option>RC Ventures</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-2col">
+      <div class="form-row">
+        <label>Status</label>
+        <select id="f-status">
+          <option>Submitted</option>
+          <option>In preparation</option>
+          <option>Planned</option>
+          <option>Won</option>
+          <option>Lost</option>
+          <option>Deferred</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <label>Amount ($)</label>
+        <input type="text" id="f-amount" placeholder="e.g. 150000 or TBD">
+      </div>
+    </div>
+    <div class="form-2col">
+      <div class="form-row">
+        <label>Lead staff</label>
+        <select id="f-lead">
+          <option value="">— Unassigned —</option>
+          <option>Aaron</option>
+          <option>Angela</option>
+          <option>Beryl</option>
+          <option>Devin</option>
+          <option>Evan</option>
+          <option>Justin</option>
+          <option>Myson</option>
+          <option>Nikki</option>
+          <option>Rachel</option>
+          <option>Sarah</option>
+          <option>Wadia</option>
+          <option>Other</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <label>Probability</label>
+        <select id="f-prob">
+          <option value="">— Unknown —</option>
+          <option>High</option>
+          <option>Medium</option>
+          <option>Low</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <label>Support team <span style="font-size:11px;color:var(--text-muted);font-weight:400;">(hold Ctrl / Cmd to select multiple)</span></label>
+      <select id="f-support" multiple style="height:110px;">
+        <option>Aaron</option>
+        <option>Angela</option>
+        <option>Beryl</option>
+        <option>Devin</option>
+        <option>Evan</option>
+        <option>Justin</option>
+        <option>Myson</option>
+        <option>Nikki</option>
+        <option>Rachel</option>
+        <option>Sarah</option>
+        <option>Wadia</option>
+        <option>Other</option>
+      </select>
+    </div>
+    <div class="form-2col">
+      <div class="form-row">
+        <label>Decision date</label>
+        <input type="date" id="f-decision-date">
+      </div>
+      <div class="form-row">
+        <label>Decision window (if no exact date)</label>
+        <input type="text" id="f-decision-window" placeholder="e.g. Late June, Q3, After board mtg">
+      </div>
+    </div>
+    <div class="form-2col">
+      <div class="form-row">
+        <label>Theme</label>
+        <select id="f-theme">
+          <option>Health equity</option>
+          <option>Civic tech / AI</option>
+          <option>Democracy / governance</option>
+          <option>Youth / leadership</option>
+          <option>Capacity building</option>
+          <option>Climate / environment</option>
+          <option>Learning / eval</option>
+          <option>Other</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <label>Change note (shown in banner + email)</label>
+        <input type="text" id="f-changenote" placeholder="e.g. Status updated to Won">
+      </div>
+    </div>
+    <div class="form-row">
+      <label>Notes</label>
+      <input type="text" id="f-notes" placeholder="e.g. CN submitted, waiting on donor">
+    </div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal()">Cancel</button>
+      <button class="btn-primary" onclick="saveOpp()">Save & notify</button>
+    </div>
   </div>
-  <div class="actions" style="justify-content:flex-end">
-    <button class="btn ghost" onclick="closePipe()">Cancel</button>
-    <button class="btn" id="pp-save" onclick="savePipe()">Add to pipeline</button>
-  </div>
-</div></div>
+</div>
 
+<div class="funnel-popover" id="funnel-popover">
+  <button class="funnel-popover-close" onclick="closePopover()">×</button>
+  <div class="funnel-popover-title" id="fp-title"></div>
+  <div id="fp-body"></div>
+</div>
+
+</div><!-- /rc-app -->
 <div class="toast" id="toast"></div>
 
 <script>
-const SUPABASE_URL = 'https://bgnraddjhuoumvyjwgzj.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_kroBXluUVUoSYYbJNugifQ_Hr5cFANt';
-const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-const SOURCES = { grantsgov:'Grants.gov', sam:'SAM.gov', usaspending:'USAspending' };
-const LIST_COLS = 'id,source_id,title,agency_name,top_level_agency,bureau,country_codes,states,geography_text,opportunity_type,stage,deadline,deadline_tz,deadline_rolling,deadline_text,award_ceiling,total_program_funding,value_unknown,eligibility_flag,set_aside,match_profiles,review_status,award_end_date,recipient_name,is_stale,first_seen_at,last_changed_at';
-let profiles = [], session = null, current = null;
-
-// ── helpers ──
-const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const money = n => n == null ? null : (n >= 1e6 ? '$' + (n/1e6).toFixed(n >= 1e7 ? 0 : 1) + 'M' : n >= 1e3 ? '$' + Math.round(n/1e3) + 'K' : '$' + Math.round(n));
-const fdate = d => d ? new Date(d.length <= 10 ? d + 'T12:00:00' : d).toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' }) : '';
-const ago = d => { if (!d) return 'never'; const h = (Date.now() - Date.parse(d)) / 36e5; return h < 1 ? Math.round(h*60) + ' min ago' : h < 48 ? Math.round(h) + ' h ago' : Math.round(h/24) + ' days ago'; };
-const titleCase = s => String(s ?? '').toLowerCase().replace(/\b([a-z])/g, m => m.toUpperCase());
-function toast(m, ms=3200){ const t=document.getElementById('toast'); t.textContent=m; t.classList.add('on'); clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove('on'), ms); }
-function value(o){ const v = o.award_ceiling ?? o.total_program_funding; return v ? money(Number(v)) : '<span class="sub">Unknown</span>'; }
-function deadline(o){
-  if (o.source_id === 'usaspending') return o.award_end_date ? 'Ends ' + fdate(o.award_end_date) : '—';
-  if (o.deadline_rolling) return 'Rolling';
-  if (o.deadline) { const d = fdate(o.deadline); const days = Math.ceil((Date.parse(o.deadline) - Date.now())/864e5); const soon = days >= 0 && days <= 14 ? ` <span class="pill p-warn">${days}d</span>` : ''; return d + soon + (o.deadline_tz && o.deadline_tz.startsWith('unverified') ? '<div class="sub">time unverified</div>' : ''); }
-  return '<span class="sub">' + esc(o.deadline_text || '—') + '</span>';
+// ── CONFIG ────────────────────────────────────────────────────────────────────
+// Replace these with your actual Supabase project values
+const SUPABASE_URL  = 'https://bgnraddjhuoumvyjwgzj.supabase.co';
+const SUPABASE_ANON = 'sb_publishable_kroBXluUVUoSYYbJNugifQ_Hr5cFANt';
+let RC_TOKEN = null;
+const rcAuth = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+async function rcBoot() {
+  const { data } = await rcAuth.auth.getSession();
+  rcAuth.auth.onAuthStateChange((_e, s) => { if (s) RC_TOKEN = s.access_token; });
+  const s = data.session;
+  const ok = s && /@rootchange\.org$/i.test(s.user.email || '');
+  if (s && !ok) { await rcAuth.auth.signOut(); document.getElementById('rc-msg').textContent = 'This dashboard is limited to rootchange.org accounts.'; }
+  document.getElementById('rc-login').style.display = ok ? 'none' : 'block';
+  document.getElementById('rc-app').style.display = ok ? 'block' : 'none';
+  if (ok) { RC_TOKEN = s.access_token; document.getElementById('rc-who').textContent = s.user.email; init(); }
 }
-function geo(o){ const g = [...(o.country_codes||[]), ...(o.states||[])].join(', '); return esc(g || o.geography_text || ''); }
-function agency(o){ const top = o.source_id === 'sam' ? titleCase(o.top_level_agency) : (o.top_level_agency || ''); const sub = o.bureau || o.agency_name || ''; return esc(top) + (sub && sub !== top ? '<div class="sub">' + esc(o.source_id==='sam' ? titleCase(sub) : sub) + '</div>' : ''); }
-const stagePill = s => s ? `<span class="pill p-${esc(s)}">${esc(s)}</span>` : '';
-const eligPill = o => o.eligibility_flag === 'not_eligible_prime' ? `<span class="pill p-warn" title="${esc(o.set_aside||'')}">Not eligible as prime</span>` : '';
-const reviewPill = r => r && r !== 'new' ? `<span class="pill p-status">${esc(r.replace('_',' '))}</span>` : '';
-const profNames = ids => (ids||[]).map(id => profiles.find(p => p.id === id)?.name).filter(Boolean);
-
-// ── auth ──
-async function boot(){
-  const { data } = await db.auth.getSession();
-  session = data.session;
-  db.auth.onAuthStateChange((_e, s) => { const was = !!session; session = s; if (!!s !== was) render(); });
-  render();
-}
-function render(){
-  const ok = session && /@rootchange\.org$/i.test(session.user.email || '');
-  document.getElementById('login').style.display = ok ? 'none' : 'block';
-  document.getElementById('app').style.display = ok ? 'block' : 'none';
-  if (session && !ok) { document.getElementById('login-msg').textContent = 'This app is limited to rootchange.org accounts.'; db.auth.signOut(); }
-  if (ok) { document.getElementById('who').textContent = session.user.email; init(); }
-}
-async function sendLink(){
-  const email = document.getElementById('login-email').value.trim();
-  const msg = document.getElementById('login-msg');
+async function rcSendLink() {
+  const email = document.getElementById('rc-email').value.trim(), msg = document.getElementById('rc-msg');
   if (!/@rootchange\.org$/i.test(email)) { msg.textContent = 'Please use your rootchange.org email.'; return; }
-  document.getElementById('login-btn').disabled = true;
-  const { error } = await db.auth.signInWithOtp({ email, options: { emailRedirectTo: location.origin + location.pathname } });
-  document.getElementById('login-btn').disabled = false;
+  const { error } = await rcAuth.auth.signInWithOtp({ email, options: { emailRedirectTo: location.origin + location.pathname } });
   if (error) { msg.textContent = 'Could not send the code: ' + error.message; return; }
   msg.textContent = 'Code sent to ' + email + '.';
-  document.getElementById('code-step').style.display = 'block';
-  document.getElementById('login-code').focus();
+  document.getElementById('rc-code-step').style.display = 'block';
+  document.getElementById('rc-code').focus();
 }
-async function verifyCode(){
-  const email = document.getElementById('login-email').value.trim();
-  const token = document.getElementById('login-code').value.replace(/\s/g, '');
-  const msg = document.getElementById('login-msg');
+async function rcVerify() {
+  const email = document.getElementById('rc-email').value.trim(), msg = document.getElementById('rc-msg');
+  const token = document.getElementById('rc-code').value.replace(/\s/g, '');
   if (!/^\d{6,10}$/.test(token)) { msg.textContent = 'Enter the numeric code from the email.'; return; }
-  document.getElementById('code-btn').disabled = true;
-  const { error } = await db.auth.verifyOtp({ email, token, type: 'email' });
-  document.getElementById('code-btn').disabled = false;
-  if (error) msg.textContent = 'That code did not work (' + error.message + '). Request a new one and use it within a few minutes.';
+  const { error } = await rcAuth.auth.verifyOtp({ email, token, type: 'email' });
+  if (error) { msg.textContent = 'That code did not work (' + error.message + '). Request a new one and use it within a few minutes.'; return; }
+  rcBoot();
 }
-async function signOut(){ await db.auth.signOut(); location.reload(); }
+async function rcSignOut() { await rcAuth.auth.signOut(); location.reload(); }
 
-// ── navigation ──
-function show(v){
-  document.querySelectorAll('nav button').forEach(b => b.classList.toggle('on', b.dataset.v === v));
-  document.querySelectorAll('.view').forEach(s => s.classList.toggle('on', s.id === 'v-' + v));
-  if (v === 'opps') loadOpps(); if (v === 'profiles') renderProfiles(); if (v === 'dash') loadDash();
-}
-let started = false;
-async function init(){
-  if (started) return; started = true;
-  await loadProfiles();
-  const sel = document.getElementById('f-profile');
-  profiles.forEach(p => sel.insertAdjacentHTML('beforeend', `<option value="${p.id}">${esc(p.name)}</option>`));
-  loadDash();
-}
-async function loadProfiles(){ const { data } = await db.from('scan_profiles').select('*').order('sort_order'); profiles = data || []; }
+// ── SUPABASE CLIENT ───────────────────────────────────────────────────────────
+const sb = {
+  async req(method, path, body) {
+    try {
+      const headers = {
+        'apikey': SUPABASE_ANON,
+        'Authorization': 'Bearer ' + (RC_TOKEN || SUPABASE_ANON),
+        'Content-Type': 'application/json',
+      };
+      if (method === 'POST') headers['Prefer'] = 'return=representation';
+      if (method === 'PATCH') headers['Prefer'] = 'return=representation';
+      const r = await fetch(SUPABASE_URL + '/rest/v1/' + path, {
+        method, headers,
+        body: body ? JSON.stringify(body) : undefined,
+      });
+      if (!r.ok) {
+        const e = await r.text();
+        console.error(`Supabase ${method} ${path} failed:`, r.status, e);
+        showToast('⚠ Save failed — check console for details');
+        return null;
+      }
+      const text = await r.text();
+      return text ? JSON.parse(text) : [];
+    } catch(e) {
+      console.error('Supabase fetch error:', e);
+      showToast('⚠ Network error — changes may not have saved');
+      return null;
+    }
+  },
+  get: (path) => sb.req('GET', path),
+  post: (path, body) => sb.req('POST', path, body),
+  patch: (path, body) => sb.req('PATCH', path, body),
+  del: (path) => sb.req('DELETE', path),
+  async rpc(fn, body) {
+    try {
+      const r = await fetch(SUPABASE_URL + '/rest/v1/rpc/' + fn, {
+        method: 'POST',
+        headers: { 'apikey': SUPABASE_ANON, 'Authorization': 'Bearer ' + (RC_TOKEN || SUPABASE_ANON), 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      return r.ok ? await r.json() : null;
+    } catch(e) { return null; }
+  }
+};
 
-// ── dashboard ──
-function matchedOpen(q){ return q.neq('match_profiles', '{}').eq('is_stale', false).in('stage', ['active','upcoming','potential']); }
-async function count(build){ const { count } = await build(db.from('scan_opportunities').select('id', { count:'exact', head:true })); return count ?? 0; }
-async function loadDash(){
-  const now = new Date(), iso = d => new Date(now.getTime() + d*864e5).toISOString();
-  const [nMatched, nNew, n7, n14, n30, nReview, nAwards] = await Promise.all([
-    count(q => matchedOpen(q)),
-    count(q => matchedOpen(q).gte('first_seen_at', iso(-7))),
-    count(q => matchedOpen(q).gte('deadline', iso(0)).lte('deadline', iso(7))),
-    count(q => matchedOpen(q).gte('deadline', iso(0)).lte('deadline', iso(14))),
-    count(q => matchedOpen(q).gte('deadline', iso(0)).lte('deadline', iso(30))),
-    count(q => q.in('review_status', ['reviewing','pursue'])),
-    count(q => matchedOpen(q).eq('source_id','usaspending')),
-  ]);
-  const card = (k, v, f) => `<div class="card ${f?'click':''}" ${f?`onclick="${f}"`:''}><div class="k">${k}</div><div class="v">${v}</div></div>`;
-  document.getElementById('stat-cards').innerHTML =
-    card('Matched & open', nMatched, "jump({})") +
-    card('New in last 7 days', nNew) +
-    card('Closing in 7 / 14 / 30 days', `${n7} / ${n14} / ${n30}`, "jump({deadline:'30'})") +
-    card('Under review / pursue', nReview, "jump({review:'reviewing'})") +
-    card('Awards ending ≤ 18 months', nAwards, "jump({source:'usaspending'})");
-  const { data: soon } = await matchedOpen(db.from('scan_opportunities').select(LIST_COLS)).gte('deadline', iso(0)).order('deadline').limit(8);
-  document.getElementById('closing-list').innerHTML = (soon||[]).length ? `<table>${soon.map(o => `<tr class="row" onclick="openDetail('${o.id}')"><td><div class="t-title">${esc(o.title)}</div><div class="sub">${esc(SOURCES[o.source_id])} · ${agency(o).replace(/<div class="sub">/,' · ').replace('</div>','')}</div></td><td style="white-space:nowrap">${deadline(o)}</td></tr>`).join('')}</table>` : '<div class="empty">Nothing matched is closing soon.</div>';
-  const { data: ch } = await db.from('scan_changes').select('field,old_value,new_value,detected_at,opportunity_id,scan_opportunities(title)').order('detected_at', { ascending:false }).limit(10);
-  document.getElementById('changes-list').innerHTML = (ch||[]).length ? `<table>${ch.map(c => `<tr class="row" onclick="openDetail('${c.opportunity_id}')"><td><div class="t-title">${esc(c.scan_opportunities?.title || '')}</div><div class="sub">${esc(c.field)}: ${esc((c.old_value||'—').slice(0,40))} → ${esc((c.new_value||'—').slice(0,40))}</div></td><td class="sub" style="white-space:nowrap">${ago(c.detected_at)}</td></tr>`).join('')}</table>` : '<div class="empty">No changes detected yet.</div>';
-  const [{ data: srcs }, { data: runs }] = await Promise.all([ db.from('scan_sources').select('*').order('id'), db.from('scan_runs').select('*').order('started_at', { ascending:false }).limit(30) ]);
-  const latest = id => (runs||[]).find(r => r.source_id === id);
-  document.getElementById('sources-table').innerHTML = `<table><tr><th>Source</th><th>Last run</th><th>Result</th><th>Found / new / changed</th><th>Last success</th><th>API calls today</th></tr>${(srcs||[]).map(s => { const r = latest(s.id); const st = r ? r.status : 'never'; const cls = st==='success'?'p-ok':st==='partial'?'p-partial':st==='running'?'p-check':'p-fail'; return `<tr><td><b>${esc(s.name)}</b>${s.enabled?'':' <span class="sub">(off)</span>'}</td><td>${ago(s.last_run_at)}</td><td><span class="pill ${cls}">${esc(st)}</span>${r&&r.error?`<div class="sub" style="max-width:340px">${esc(r.error)}</div>`:''}</td><td>${r?`${r.records_found} / ${r.records_new} / ${r.records_changed}`:'—'}</td><td>${ago(s.last_success_at)}</td><td>${s.daily_call_budget ? `${s.calls_date === new Date().toISOString().slice(0,10) ? s.calls_today : 0} of ${s.daily_call_budget}` : '<span class="sub">no limit</span>'}</td></tr>`; }).join('')}</table>`;
-  const lastOk = (srcs||[]).map(s => s.last_success_at).filter(Boolean).sort().pop();
-  document.getElementById('last-scan').textContent = 'Last successful scan ' + ago(lastOk) + (lastOk ? ' · ' + new Date(lastOk).toLocaleString('en-US', { weekday:'short', month:'short', day:'numeric', hour:'numeric', minute:'2-digit' }) : '');
+// ── SESSION ID (persists per browser, identifies who dismissed the banner) ───
+function getSessionId() {
+  let id = localStorage.getItem('rc_session');
+  if (!id) { id = 'sess_' + Math.random().toString(36).slice(2); localStorage.setItem('rc_session', id); }
+  return id;
 }
-function jump(f){
-  ['f-q','f-profile','f-source','f-deadline','f-elig','f-review'].forEach(id => document.getElementById(id).value = '');
-  document.getElementById('f-stage').value = 'open';
-  if (f.deadline) document.getElementById('f-deadline').value = f.deadline;
-  if (f.review) document.getElementById('f-review').value = f.review;
-  if (f.source) document.getElementById('f-source').value = f.source;
-  show('opps');
+const SESSION_ID = getSessionId();
+
+// ── PORTFOLIOS & STAGES ───────────────────────────────────────────────────────
+const PORTFOLIOS = [
+  { key: 'Root Change',        color: '#2a78d6', light: '#e6f1fb', dark: '#0C447C', badgeClass: 'badge-rc' },
+  { key: 'Fiscal Sponsorship', color: '#1D9E75', light: '#e1f5ee', dark: '#085041', badgeClass: 'badge-fs' },
+  { key: 'RC Ventures',        color: '#4a3aa7', light: '#eeedfe', dark: '#26215C', badgeClass: 'badge-rcv' },
+];
+const STAGE_COLORS = { 'Submitted': '#2a78d6', 'In preparation': '#eda100', 'Planned': '#888780' };
+
+// ── SEED DATA (used when Supabase is not yet configured) ──────────────────────
+const SEED_OPPS = [
+  { id:1,  name:'Technical Support / Consultancy',     funder:'Intl Civil Society Center',       portfolio:'Root Change',        status:'Submitted',      amount:15000,   theme:'Capacity building',      lead:'Evan',  prob:'Medium', decision_date:'', decision_window:'',        notes:'' },
+  { id:2,  name:'Health Equity Research',              funder:'RWJF',                             portfolio:'Root Change',        status:'Submitted',      amount:500000,  theme:'Health equity',          lead:'Evan',  prob:'Medium', decision_date:'', decision_window:'Late July', notes:'' },
+  { id:3,  name:'AI for Gov',                          funder:'Google.org',                       portfolio:'Root Change',        status:'Submitted',      amount:2800000, theme:'Civic tech / AI',        lead:'Evan',  prob:'Low',    decision_date:'2026-06-30', decision_window:'', notes:'' },
+  { id:4,  name:'Global Programs Connect Consultancy', funder:'Equality Fund',                    portfolio:'Root Change',        status:'Submitted',      amount:55000,   theme:'Democracy / governance', lead:'Nikki', prob:'High',   decision_date:'', decision_window:'',        notes:'' },
+  { id:5,  name:'Heartland Health Equity Platform',    funder:'AWS',                              portfolio:'Root Change',        status:'Submitted',      amount:150000,  theme:'Health equity',          lead:'Evan',  prob:'Medium', decision_date:'2026-07-31', decision_window:'', notes:'' },
+  { id:6,  name:'Forestry Foundation RCV',             funder:'Forestry Foundation',              portfolio:'RC Ventures',        status:'Submitted',      amount:150000,  theme:'Climate / environment',  lead:'Devin', prob:'Medium', decision_date:'', decision_window:'',        notes:'Devin + RC lead' },
+  { id:7,  name:'RVC RC',                              funder:'RVCRC',                            portfolio:'RC Ventures',        status:'Submitted',      amount:8000,    theme:'Other',                  lead:'Evan',  prob:'High',   decision_date:'', decision_window:'',        notes:'Sarah & EB' },
+  { id:8,  name:'Fiscal Sponsorship – UC Boulder',     funder:'Univ of Colorado Boulder',         portfolio:'Fiscal Sponsorship', status:'Submitted',      amount:50000,   theme:'Capacity building',      lead:'Nikki', prob:'High',   decision_date:'', decision_window:'',        notes:'$50K+' },
+  { id:9,  name:'ESG Dept Master Services',            funder:'IDB',                              portfolio:'Root Change',        status:'Submitted',      amount:0,       theme:'Capacity building',      lead:'Beryl', prob:'Medium', decision_date:'', decision_window:'',        notes:'Eligibility to compete; PACE' },
+  { id:10, name:'ESG Capacity Building Tech Support',  funder:'IDB',                              portfolio:'Root Change',        status:'In preparation', amount:50000,   theme:'Capacity building',      lead:'Beryl', prob:'Low',    decision_date:'', decision_window:'',        notes:'Submitted; donor hold' },
+  { id:11, name:'Youth-focused CII model',             funder:'Young Africa',                     portfolio:'Root Change',        status:'In preparation', amount:120000,  theme:'Youth / leadership',     lead:'Nikki', prob:'Low',    decision_date:'', decision_window:'',        notes:'Seeking donor' },
+  { id:12, name:'Social labs',                         funder:'CCF & Tony Robbins Fdn',           portfolio:'Root Change',        status:'Planned',        amount:150000,  theme:'Learning / eval',        lead:'Evan',  prob:'Low',    decision_date:'', decision_window:'2027',    notes:'Planned 2027' },
+  { id:13, name:'Agentic AI for Development',          funder:'Skoll Group / KX Platform',        portfolio:'RC Ventures',        status:'In preparation', amount:0,       theme:'Civic tech / AI',        lead:'Evan',  prob:'Low',    decision_date:'', decision_window:'',        notes:'CN submitted; donor needed' },
+  { id:14, name:'WiLead follow-on',                    funder:'Joyce / Park / Mosaic',            portfolio:'Root Change',        status:'In preparation', amount:225000,  theme:'Youth / leadership',     lead:'Nikki', prob:'Medium', decision_date:'', decision_window:'',        notes:'$150–300K range; TBD' },
+  { id:15, name:'CII / PDC',                           funder:'DIV Fund',                         portfolio:'Root Change',        status:'In preparation', amount:500000,  theme:'Democracy / governance', lead:'Evan',  prob:'Low',    decision_date:'', decision_window:'',        notes:'TBD' },
+  { id:16, name:'Heartland Equity',                    funder:'Kellogg Foundation',               portfolio:'Root Change',        status:'In preparation', amount:500000,  theme:'Health equity',          lead:'Evan',  prob:'Medium', decision_date:'', decision_window:'August',  notes:'CN submitted; waiting on donor' },
+  { id:17, name:'CPTA',                                funder:'Deetjens / Hilton Fdn + Citizen U',portfolio:'Root Change',        status:'In preparation', amount:0,       theme:'Capacity building',      lead:'Beryl', prob:'Medium', decision_date:'', decision_window:'',        notes:'CN submitted; scheduled' },
+  { id:18, name:'Braver Workplace',                    funder:'Braver Workplace',                 portfolio:'RC Ventures',        status:'Planned',        amount:0,       theme:'Learning / eval',        lead:'Evan',  prob:'Low',    decision_date:'', decision_window:'',        notes:'Learning partner; planned' },
+  { id:19, name:'Legado Learning Partner / PDC',       funder:'Legado',                           portfolio:'RC Ventures',        status:'Planned',        amount:0,       theme:'Learning / eval',        lead:'Nikki', prob:'Low',    decision_date:'', decision_window:'',        notes:'CN planned' },
+  { id:20, name:'Malawi PDC',                          funder:'Tilitonse / Norwegian Embassy',    portfolio:'Root Change',        status:'Planned',        amount:0,       theme:'Democracy / governance', lead:'Wadia', prob:'Medium', decision_date:'', decision_window:'',        notes:'Planned' },
+  { id:21, name:'Research – Faith Forward Democracy',  funder:'PACE',                             portfolio:'Root Change',        status:'Planned',        amount:0,       theme:'Democracy / governance', lead:'Evan',  prob:'Low',    decision_date:'', decision_window:'',        notes:'Planned' },
+  { id:22, name:'Carter Center / ELK',                 funder:'Carter Center',                    portfolio:'Root Change',        status:'Planned',        amount:0,       theme:'Democracy / governance', lead:'Evan',  prob:'Medium', decision_date:'', decision_window:'',        notes:'Planned' },
+];
+
+// ── STATE ─────────────────────────────────────────────────────────────────────
+let opps = [];
+let subscribers = [];
+let changelog = [];
+let nextId = 100;
+let activeFilter = 'all';
+let activePortfolioFilter = 'all';
+let editingId = null;
+let valueChartInst = null;
+let themeChartInst = null;
+let useSupabase = false;
+
+// ── FUNNEL POPOVER ────────────────────────────────────────────────────────────
+function showFunnelPopover(e, stage, portfolio, idStr, color, dark) {
+  e.stopPropagation();
+  const ids = idStr.split(',').map(Number);
+  const these = opps.filter(o => ids.includes(o.id));
+  const pop = document.getElementById('funnel-popover');
+  document.getElementById('fp-title').innerHTML =
+    `<div class="funnel-popover-swatch" style="background:${color};"></div>${portfolio} · ${stage}`;
+  document.getElementById('fp-body').innerHTML = these.map(o => {
+    const dec = o.decision_date
+      ? new Date(o.decision_date+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})
+      : (o.decision_window || '');
+    const prob = o.prob ? `${o.prob} prob` : '';
+    const lead = o.lead ? `Lead: ${o.lead}` : '';
+    const support = o.support ? `Support: ${o.support}` : '';
+    const meta = [fmtAmt(o.amount), prob, lead, support, dec].filter(Boolean).join(' · ');
+    return `<div class="funnel-popover-item">
+      <div class="funnel-popover-name">${o.name}</div>
+      <div class="funnel-popover-meta">${o.funder}${meta ? ' · ' + meta : ''}</div>
+    </div>`;
+  }).join('');
+
+  // Position near click, keep on screen
+  pop.classList.add('visible');
+  const pw = pop.offsetWidth || 300, ph = pop.offsetHeight || 200;
+  let x = e.clientX + 12, y = e.clientY + 12;
+  if (x + pw > window.innerWidth - 16) x = e.clientX - pw - 8;
+  if (y + ph > window.innerHeight - 16) y = e.clientY - ph - 8;
+  pop.style.left = x + 'px';
+  pop.style.top = y + 'px';
 }
-async function scanNow(){
-  const b = document.getElementById('scan-btn');
-  if (!confirm('Run a scan now? Grants.gov and USAspending take about a minute. SAM.gov uses part of its daily call allowance.')) return;
-  b.disabled = true; b.textContent = 'Scanning…';
+
+function closePopover() {
+  document.getElementById('funnel-popover').classList.remove('visible');
+}
+
+document.addEventListener('click', e => {
+  const pop = document.getElementById('funnel-popover');
+  if (pop.classList.contains('visible') && !pop.contains(e.target)) closePopover();
+});
+
+// ── INIT ──────────────────────────────────────────────────────────────────────
+async function init() {
+  document.getElementById('header-meta').textContent = 'Updated ' + new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+  setDbStatus('connecting…', '');
+  const test = await sb.get('opportunities?select=id&limit=1');
+  if (test !== null) {
+    useSupabase = true;
+    setDbStatus('live', 'db-ok');
+    await Promise.all([loadOpps(), loadSubscribers(), loadChangelog()]);
+  } else {
+    setDbStatus('could not load data', 'db-warn');
+    opps = [];
+  }
+  renderDashboard();
+  checkChangelog();
+}
+
+function setDbStatus(msg, cls) {
+  const el = document.getElementById('db-status');
+  el.textContent = msg;
+  el.className = 'db-status ' + cls;
+}
+
+// ── DATA LOADING ──────────────────────────────────────────────────────────────
+async function loadOpps() {
+  const data = await sb.get('opportunities?select=*&order=id.asc');
+  opps = data || [];
+  if (opps.length > 0) nextId = Math.max(...opps.map(o => o.id)) + 1;
+}
+
+async function loadSubscribers() {
+  const data = await sb.get('subscribers?select=*&order=created_at.asc');
+  subscribers = data || [];
+}
+
+async function loadChangelog() {
+  const now = new Date().toISOString();
+  const data = await sb.get(`changelog?select=*&expires_at=gt.${now}&order=created_at.desc&limit=20`);
+  changelog = data || [];
+}
+
+// ── SUBSCRIBER MANAGEMENT ─────────────────────────────────────────────────────
+async function addSubscriber() {
+  const input = document.getElementById('sub-add-input');
+  const email = input?.value?.trim().toLowerCase();
+  if (!email || !email.includes('@')) { showToast('Please enter a valid email address'); return; }
+  if (subscribers.find(s => s.email === email)) { showToast('That email is already subscribed'); return; }
+
+  const newSub = { email, created_at: new Date().toISOString() };
+  if (useSupabase) {
+    const result = await sb.post('subscribers', { email });
+    if (result && result[0]) newSub.id = result[0].id;
+  } else {
+    newSub.id = Date.now();
+  }
+  subscribers.push(newSub);
+  input.value = '';
+  input.classList.add('success');
+  setTimeout(() => input.classList.remove('success'), 1200);
+  renderSubList(email);
+  showToast('✓ ' + email + ' added');
+}
+
+async function removeSubscriber(email) {
+  if (!confirm('Remove ' + email + ' from notifications?')) return;
+  if (useSupabase) await sb.del('subscribers?email=eq.' + encodeURIComponent(email));
+  subscribers = subscribers.filter(s => s.email !== email);
+  renderSubList();
+  showToast('Removed ' + email);
+}
+
+// ── CHANGELOG BANNER ──────────────────────────────────────────────────────────
+function checkChangelog() {
+  const dismissed = JSON.parse(localStorage.getItem('rc_dismissed') || '[]');
+  const visible = changelog.filter(c => !dismissed.includes(c.id));
+  if (visible.length === 0) return;
+  const banner = document.getElementById('changelog-banner');
+  const entries = document.getElementById('banner-entries');
+  entries.innerHTML = visible.map(c => {
+    const age = getAge(c.created_at);
+    return `<div class="banner-entry"><span class="banner-entry-age">${age}</span><span>${c.message}</span></div>`;
+  }).join('');
+  banner.classList.add('visible');
+}
+
+function dismissBanner() {
+  const dismissed = JSON.parse(localStorage.getItem('rc_dismissed') || '[]');
+  changelog.forEach(c => { if (!dismissed.includes(c.id)) dismissed.push(c.id); });
+  localStorage.setItem('rc_dismissed', JSON.stringify(dismissed));
+  document.getElementById('changelog-banner').classList.remove('visible');
+}
+
+function getAge(isoStr) {
+  const diff = Date.now() - new Date(isoStr).getTime();
+  const hrs = Math.floor(diff / 3600000);
+  if (hrs < 1) return 'just now';
+  if (hrs < 24) return hrs + 'h ago';
+  const days = Math.floor(hrs / 24);
+  return days + 'd ago';
+}
+
+async function writeChangelog(message) {
+  const expires = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString();
+  const entry = { message, expires_at: expires };
+  if (useSupabase) {
+    const result = await sb.post('changelog', entry);
+    if (result && result[0]) changelog.unshift(result[0]);
+  } else {
+    changelog.unshift({ id: Date.now(), message, created_at: new Date().toISOString(), expires_at: entry.expires_at });
+  }
+}
+
+// ── HELPERS ───────────────────────────────────────────────────────────────────
+function fmtAmt(v) {
+  if (!v || v === 0) return 'TBD';
+  if (v >= 1000000) return '$' + (v/1000000).toFixed(1) + 'M';
+  if (v >= 1000) return '$' + Math.round(v/1000) + 'K';
+  return '$' + v.toLocaleString();
+}
+function portfolioMeta(key) { return PORTFOLIOS.find(p => p.key === key) || PORTFOLIOS[0]; }
+function statusBadge(s) {
+  const map = { 'Submitted':'badge-submitted','In preparation':'badge-prep','Planned':'badge-planned','Won':'badge-won','Lost':'badge-hold','Deferred':'badge-hold' };
+  return `<span class="badge ${map[s]||'badge-planned'}">${s}</span>`;
+}
+function portfolioBadge(p) { const m = portfolioMeta(p); return `<span class="badge ${m.badgeClass}">${p}</span>`; }
+function probBadge(p) {
+  if (!p) return '<span style="font-size:11px;color:var(--text-muted);">—</span>';
+  const cls = { 'High':'badge-high','Medium':'badge-medium','Low':'badge-low' };
+  return `<span class="badge ${cls[p]||''}">${p}</span>`;
+}
+function showToast(msg) {
+  const t = document.getElementById('toast'); t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+// ── VIEWS ─────────────────────────────────────────────────────────────────────
+function showView(v, btn) {
+  document.querySelectorAll('.view').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('nav button').forEach(el => el.classList.remove('active'));
+  document.getElementById('view-' + v).classList.add('active');
+  if (btn) btn.classList.add('active');
+  if (v === 'dashboard') renderDashboard();
+  if (v === 'opportunities') renderTable();
+  if (v === 'admin') { renderAdmin(); renderSubList(); }
+}
+
+// ── DASHBOARD ─────────────────────────────────────────────────────────────────
+function renderDashboard() {
+  const PROB_WEIGHT = { 'High': 0.9, 'Medium': 0.6, 'Low': 0.25, '': 0.4 };
+  const CLOSED = ['Won', 'Lost', 'Deferred'];
+  const stages = ['Submitted', 'In preparation', 'Planned'];
+  const activeOpps = opps.filter(o => !CLOSED.includes(o.status));
+  const closedOpps = opps.filter(o => CLOSED.includes(o.status));
+  const wonOpps = opps.filter(o => o.status === 'Won');
+
+  // KPIs — active pipeline only
+  const totalVal = activeOpps.filter(o=>o.amount>0).reduce((a,b)=>a+b.amount,0);
+  const weightedVal = activeOpps.filter(o=>o.amount>0).reduce((a,b)=>a+(b.amount*(PROB_WEIGHT[b.prob||'']||0.4)),0);
+  const submitted = activeOpps.filter(o=>o.status==='Submitted');
+  const submittedVal = submitted.filter(o=>o.amount>0).reduce((a,b)=>a+b.amount,0);
+  document.getElementById('kpi-row').innerHTML = `
+    <div class="kpi"><div class="kpi-label">Active pipeline</div><div class="kpi-value">${fmtAmt(totalVal)}</div><div class="kpi-sub">${activeOpps.length} active opportunities</div></div>
+    <div class="kpi"><div class="kpi-label">Weighted value</div><div class="kpi-value">${fmtAmt(Math.round(weightedVal))}</div><div class="kpi-sub">prob-adjusted estimate</div></div>
+    <div class="kpi"><div class="kpi-label">Submitted & awaiting</div><div class="kpi-value">${submitted.length}</div><div class="kpi-sub">${fmtAmt(submittedVal)} known value</div></div>
+    <div class="kpi"><div class="kpi-label">Won (all time)</div><div class="kpi-value">${wonOpps.length}</div><div class="kpi-sub">${fmtAmt(wonOpps.filter(o=>o.amount>0).reduce((a,b)=>a+b.amount,0))} closed</div></div>
+  `;
+
+  // Portfolio tiles — active only
+  document.getElementById('portfolio-row').innerHTML = PORTFOLIOS.map(p => {
+    const these = activeOpps.filter(o => o.portfolio === p.key);
+    const val = these.filter(o=>o.amount>0).reduce((a,b)=>a+b.amount,0);
+    const stageBreakdown = stages.map(s => {
+      const n = these.filter(o=>o.status===s).length;
+      return n ? `<span class="ptile-badge" style="background:${STAGE_COLORS[s]}18;color:${p.dark};">${n} ${s.toLowerCase()}</span>` : '';
+    }).filter(Boolean).join('');
+    return `<div class="portfolio-tile" style="--tile-color:${p.color};">
+      <div class="portfolio-tile-label">${p.key}</div>
+      <div class="portfolio-tile-count">${these.length} <span style="font-size:14px;font-weight:400;color:var(--text-secondary);">active</span></div>
+      <div class="portfolio-tile-val">${fmtAmt(val)} known value</div>
+      <div class="portfolio-tile-stages">${stageBreakdown}</div>
+    </div>`;
+  }).join('');
+
+  // Stacked funnel — active only
+  const maxStageCount = Math.max(...stages.map(s => activeOpps.filter(o=>o.status===s).length), 1);
+  const sfHtml = stages.map(s => {
+    const stageOpps = activeOpps.filter(o=>o.status===s);
+    const stTotal = stageOpps.length;
+    const segments = PORTFOLIOS.map(p => {
+      const segOpps = stageOpps.filter(o=>o.portfolio===p.key);
+      const n = segOpps.length;
+      if (n === 0) return '';
+      const segPct = Math.round((n / stTotal) * 100);
+      const alone = PORTFOLIOS.filter(p2 => stageOpps.filter(o=>o.portfolio===p2.key).length > 0).length === 1;
+      const ids = segOpps.map(o=>o.id).join(',');
+      return `<div class="sfunnel-seg${alone?' only':''}" style="width:${segPct}%;background:${p.light};border-left:2px solid ${p.color};" onclick="showFunnelPopover(event,'${s}','${p.key}','${ids}','${p.color}','${p.dark}')"><span style="color:${p.dark};padding:0 6px;">${n}</span></div>`;
+    }).join('');
+    const stageVal = stageOpps.filter(o=>o.amount>0).reduce((a,b)=>a+b.amount,0);
+    return `<div class="sfunnel-stage">
+      <div class="sfunnel-label">${s}</div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <div class="sfunnel-bar-row" style="flex:1;">${segments || '<div style="padding:0 10px;font-size:11px;color:var(--text-muted);line-height:32px;">none</div>'}</div>
+        <span style="font-size:12px;color:var(--text-muted);width:36px;text-align:right;">${stTotal}</span>
+      </div>
+      <div class="sfunnel-total">${fmtAmt(stageVal)}</div>
+    </div>`;
+  }).join('');
+  const legend = PORTFOLIOS.map(p => `<div class="sfunnel-legend-item"><div class="sfunnel-swatch" style="background:${p.light};border:1.5px solid ${p.color};"></div>${p.key}</div>`).join('');
+  document.getElementById('sfunnel').innerHTML = sfHtml + `<div class="sfunnel-legend">${legend}</div>`;
+  const stageVals = stages.map(s => activeOpps.filter(o=>o.status===s&&o.amount>0).reduce((a,b)=>a+b.amount,0)/1000);
+  if (valueChartInst) valueChartInst.destroy();
+  valueChartInst = new Chart(document.getElementById('valueChart'), {
+    type: 'bar',
+    data: { labels: stages, datasets: [{ data: stageVals, backgroundColor: ['#2a78d622','#eda10022','#88878022'], borderColor: ['#2a78d6','#eda100','#888780'], borderWidth: 1.5, borderRadius: 4 }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { display: false }, ticks: { font: { size: 12 }, color: '#898781' } }, y: { grid: { color: '#e1e0d9' }, ticks: { font: { size: 11 }, color: '#898781', callback: v => '$' + Math.round(v) + 'K' } } } }
+  });
+
+  // Theme chart — active only
+  const themes = {};
+  activeOpps.forEach(o => { themes[o.theme] = (themes[o.theme]||0) + 1; });
+  const themeColors = ['#2a78d6','#1baf7a','#eda100','#4a3aa7','#eb6834','#e34948','#e87ba4','#888780'];
+  const tLabels = Object.keys(themes);
+  if (themeChartInst) themeChartInst.destroy();
+  themeChartInst = new Chart(document.getElementById('themeChart'), {
+    type: 'doughnut',
+    data: { labels: tLabels, datasets: [{ data: tLabels.map(t=>themes[t]), backgroundColor: themeColors.slice(0,tLabels.length), borderWidth: 2, borderColor: '#fff' }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { font: { size: 11 }, boxWidth: 10, padding: 8, color: '#52514e' } } }, cutout: '60%' }
+  });
+  // Decision calendar — real dates first, then windows
+  const today = new Date(); today.setHours(0,0,0,0);
+  const in90 = new Date(today); in90.setDate(today.getDate() + 90);
+  const withDates = opps
+    .filter(o => o.decision_date && !['Won','Lost','Deferred'].includes(o.status))
+    .map(o => ({ ...o, _date: new Date(o.decision_date + 'T00:00:00') }))
+    .filter(o => o._date >= today && o._date <= in90)
+    .sort((a,b) => a._date - b._date);
+  const withWindows = opps
+    .filter(o => !o.decision_date && o.decision_window && !['Won','Lost','Deferred'].includes(o.status));
+  const calItems = [
+    ...withDates.map(o => {
+      const label = o._date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      const p = portfolioMeta(o.portfolio);
+      return `<div class="cal-item" style="border-left-color:${p.color};">
+        <div class="cal-date">${label}</div>
+        <div class="cal-name">${o.name}</div>
+        <div class="cal-amount">${fmtAmt(o.amount)}</div>
+      </div>`;
+    }),
+    ...withWindows.map(o => {
+      const p = portfolioMeta(o.portfolio);
+      return `<div class="cal-item" style="border-left-color:${p.color};opacity:0.8;">
+        <div class="cal-date" style="font-style:italic;">${o.decision_window}</div>
+        <div class="cal-name">${o.name}</div>
+        <div class="cal-amount">${fmtAmt(o.amount)}</div>
+      </div>`;
+    }),
+  ];
+  document.getElementById('cal-list').innerHTML = calItems.length
+    ? calItems.join('')
+    : '<div style="font-size:12px;color:var(--text-muted);text-align:center;padding:1.5rem;">No upcoming decisions in the next 90 days</div>';
+
+  // Closed deals section
+  const wonVal = wonOpps.filter(o=>o.amount>0).reduce((a,b)=>a+b.amount,0);
+  const lostOpps = opps.filter(o=>o.status==='Lost');
+  const deferredOpps = opps.filter(o=>o.status==='Deferred');
+  const totalClosed = wonOpps.length + lostOpps.length;
+  const winRate = totalClosed > 0 ? Math.round((wonOpps.length / totalClosed) * 100) : 0;
+
+  document.getElementById('closed-title').textContent = `Closed deals · ${closedOpps.length} total`;
+  if (closedOpps.length === 0) {
+    document.getElementById('closed-section').innerHTML = '<div class="closed-empty">No closed deals yet.</div>';
+  } else {
+    document.getElementById('closed-section').innerHTML = `
+      <div class="closed-summary">
+        <div class="closed-stat">
+          <div class="closed-stat-label">Won</div>
+          <div class="closed-stat-value" style="color:var(--green);">${wonOpps.length}</div>
+          <div class="closed-stat-sub">${fmtAmt(wonVal)} total value</div>
+        </div>
+        <div class="closed-stat">
+          <div class="closed-stat-label">Lost</div>
+          <div class="closed-stat-value" style="color:var(--coral);">${lostOpps.length}</div>
+          <div class="closed-stat-sub">${deferredOpps.length} deferred</div>
+        </div>
+        <div class="closed-stat">
+          <div class="closed-stat-label">Win rate</div>
+          <div class="closed-stat-value">${winRate}%</div>
+          <div class="closed-stat-sub">of decided opportunities</div>
+        </div>
+      </div>
+      <div class="closed-list">
+        ${closedOpps.map(o => {
+          const cls = o.status === 'Won' ? 'won' : o.status === 'Lost' ? 'lost' : 'deferred';
+          const p = portfolioMeta(o.portfolio);
+          return `<div class="closed-item ${cls}">
+            <span class="badge badge-${o.status === 'Won' ? 'won' : 'hold'}">${o.status}</span>
+            <span class="closed-item-name">${o.name}</span>
+            <span class="closed-item-funder">${o.funder}</span>
+            <span style="font-size:11px;padding:2px 6px;border-radius:3px;background:${p.light};color:${p.dark};">${o.portfolio}</span>
+            <span class="closed-item-amount">${fmtAmt(o.amount)}</span>
+          </div>`;
+        }).join('')}
+      </div>`;
+  }
+}
+
+// ── TABLE ─────────────────────────────────────────────────────────────────────
+function setFilter(f, btn) { activeFilter = f; activePortfolioFilter = 'all'; document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active')); btn.classList.add('active'); renderTable(); }
+function setPortfolioFilter(f, btn) { activePortfolioFilter = f; activeFilter = 'all'; document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active')); btn.classList.add('active'); renderTable(); }
+function renderTable() {
+  const q = (document.getElementById('search-input')?.value || '').toLowerCase();
+  const rows = opps.filter(o => {
+    return (activeFilter === 'all' || o.status === activeFilter) &&
+           (activePortfolioFilter === 'all' || o.portfolio === activePortfolioFilter) &&
+           (!q || o.name.toLowerCase().includes(q) || o.funder.toLowerCase().includes(q) || (o.lead||'').toLowerCase().includes(q) || o.theme.toLowerCase().includes(q));
+  });
+  document.getElementById('opp-tbody').innerHTML = rows.map(o => {
+    const decLabel = o.decision_date
+      ? new Date(o.decision_date+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})
+      : (o.decision_window || '—');
+    return `<tr>
+      <td style="font-weight:500;max-width:180px;">${o.name}</td>
+      <td style="color:var(--text-secondary);">${o.funder}</td>
+      <td>${portfolioBadge(o.portfolio)}</td>
+      <td>${statusBadge(o.status)}</td>
+      <td>${fmtAmt(o.amount)}</td>
+      <td>${probBadge(o.prob)}</td>
+      <td style="font-size:12px;color:var(--text-secondary);">${o.lead||'—'}</td>
+      <td style="font-size:12px;color:var(--text-secondary);">${o.support||'—'}</td>
+      <td style="font-size:12px;color:var(--text-muted);">${decLabel}</td>
+      <td style="font-size:11px;color:var(--text-muted);">${o.theme}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ── ADMIN ─────────────────────────────────────────────────────────────────────
+function renderAdmin() {
+  document.getElementById('admin-tbody').innerHTML = opps.map(o => {
+    const decLabel = o.decision_date
+      ? new Date(o.decision_date+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})
+      : (o.decision_window || '—');
+    return `<tr>
+      <td style="font-weight:500;max-width:160px;">${o.name}</td>
+      <td style="color:var(--text-secondary);font-size:12px;">${o.funder}</td>
+      <td>${portfolioBadge(o.portfolio)}</td>
+      <td>${statusBadge(o.status)}</td>
+      <td>${probBadge(o.prob)}</td>
+      <td style="font-size:12px;color:var(--text-secondary);">${o.lead||'—'}</td>
+      <td style="font-size:12px;color:var(--text-secondary);max-width:120px;">${o.support||'—'}</td>
+      <td style="font-size:12px;">${fmtAmt(o.amount)}</td>
+      <td style="font-size:12px;color:var(--text-muted);">${decLabel}</td>
+      <td style="color:var(--text-secondary);font-size:12px;max-width:130px;">${o.notes}</td>
+      <td style="white-space:nowrap;">
+        <button class="btn-sm" onclick="editOpp(${o.id})">Edit</button>
+        <button class="btn-sm" style="color:var(--coral-dark);margin-left:4px;" onclick="deleteOpp(${o.id})">Remove</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function renderSubList(flashEmail) {
+  const el = document.getElementById('sub-list');
+  const badge = document.getElementById('sub-count-badge');
+  const n = subscribers.length;
+  if (badge) badge.textContent = n + ' subscriber' + (n !== 1 ? 's' : '');
+
+  if (!useSupabase && subscribers.length === 0) {
+    el.innerHTML = '<div class="sub-empty">Connect Supabase to persist subscribers.<br><span style="font-size:11px;color:var(--text-muted);">You can still add emails below — they\'ll be remembered this session.</span></div>';
+    return;
+  }
+  if (subscribers.length === 0) {
+    el.innerHTML = '<div class="sub-empty">No subscribers yet. Add an email above to get started.</div>';
+    return;
+  }
+  el.innerHTML = subscribers.map(s => {
+    const initials = s.email.slice(0, 2).toUpperCase();
+    const isNew = s.email === flashEmail;
+    return `<div class="sub-item${isNew ? ' new-flash' : ''}" id="sub-${s.email.replace(/[@.]/g,'_')}">
+      <div class="sub-item-left">
+        <div class="sub-avatar">${initials}</div>
+        <div>
+          <div class="sub-item-email">${s.email}</div>
+          <div class="sub-item-date">Added ${getAge(s.created_at)}</div>
+        </div>
+      </div>
+      <div class="sub-item-right">
+        <button class="btn-sm" style="color:var(--coral-dark);" onclick="removeSubscriber('${s.email}')">Remove</button>
+      </div>
+    </div>`;
+  }).join('');
+
+  if (flashEmail) {
+    const el2 = document.getElementById('sub-' + flashEmail.replace(/[@.]/g,'_'));
+    if (el2) { setTimeout(() => el2.classList.remove('new-flash'), 2000); }
+  }
+}
+
+// ── MODAL / SAVE ──────────────────────────────────────────────────────────────
+function openModal(id) {
+  editingId = id || null;
+  document.getElementById('modal-title').textContent = id ? 'Edit opportunity' : 'Add opportunity';
+  document.getElementById('f-changenote').value = '';
+  if (id) {
+    const o = opps.find(x => x.id === id);
+    document.getElementById('f-name').value = o.name;
+    document.getElementById('f-funder').value = o.funder;
+    document.getElementById('f-portfolio').value = o.portfolio;
+    document.getElementById('f-status').value = o.status;
+    document.getElementById('f-amount').value = o.amount || '';
+    document.getElementById('f-theme').value = o.theme;
+    document.getElementById('f-lead').value = o.lead || '';
+    document.getElementById('f-prob').value = o.prob || '';
+    // Restore multi-select support team
+    const supportVals = (o.support || '').split(',').map(s=>s.trim()).filter(Boolean);
+    Array.from(document.getElementById('f-support').options).forEach(opt => {
+      opt.selected = supportVals.includes(opt.value);
+    });
+    document.getElementById('f-decision-date').value = o.decision_date || '';
+    document.getElementById('f-decision-window').value = o.decision_window || '';
+    document.getElementById('f-notes').value = o.notes;
+    document.getElementById('f-changenote').placeholder = 'e.g. Status updated to Won';
+  } else {
+    ['f-name','f-funder','f-amount','f-notes','f-decision-date','f-decision-window','f-changenote'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('f-portfolio').value = 'Root Change';
+    document.getElementById('f-status').value = 'Submitted';
+    document.getElementById('f-theme').value = 'Health equity';
+    document.getElementById('f-lead').value = '';
+    document.getElementById('f-prob').value = '';
+    Array.from(document.getElementById('f-support').options).forEach(opt => opt.selected = false);
+    document.getElementById('f-changenote').placeholder = 'e.g. New opportunity added';
+  }
+  document.getElementById('modal').classList.add('open');
+}
+function closeModal() { document.getElementById('modal').classList.remove('open'); editingId = null; }
+
+async function saveOpp() {
+  const name = document.getElementById('f-name').value.trim();
+  if (!name) { showToast('Please enter an opportunity name'); return; }
+  const obj = {
+    name, funder: document.getElementById('f-funder').value.trim(),
+    portfolio: document.getElementById('f-portfolio').value,
+    status: document.getElementById('f-status').value,
+    amount: parseInt(document.getElementById('f-amount').value) || 0,
+    theme: document.getElementById('f-theme').value,
+    lead: document.getElementById('f-lead').value,
+    prob: document.getElementById('f-prob').value,
+    support: Array.from(document.getElementById('f-support').selectedOptions).map(o=>o.value).join(', '),
+    decision_date: document.getElementById('f-decision-date').value || null,
+    decision_window: document.getElementById('f-decision-window').value.trim(),
+    notes: document.getElementById('f-notes').value.trim(),
+  };
+  const changeNote = document.getElementById('f-changenote').value.trim();
+  let changeMsg = '';
+  if (editingId) {
+    changeMsg = changeNote || `Updated: ${name}`;
+    if (useSupabase) {
+      const result = await sb.patch('opportunities?id=eq.' + editingId, obj);
+      if (result === null) return; // error already toasted, bail out
+      // Reload from Supabase to confirm saved state
+      await loadOpps();
+    } else {
+      const idx = opps.findIndex(o => o.id === editingId);
+      opps[idx] = { ...opps[idx], ...obj };
+    }
+    showToast('Opportunity updated');
+  } else {
+    changeMsg = changeNote || `New opportunity added: ${name} (${obj.portfolio})`;
+    if (useSupabase) {
+      const result = await sb.post('opportunities', obj);
+      if (result === null) return;
+      await loadOpps();
+    } else {
+      opps.push({ id: nextId++, ...obj });
+    }
+    showToast('Opportunity added');
+  }
+  await writeChangelog(changeMsg);
+  checkChangelog();
+  if (useSupabase) triggerEmailNotification(changeMsg);
+  closeModal();
+  renderAdmin();
+  renderDashboard();
+}
+
+async function deleteOpp(id) {
+  const o = opps.find(x => x.id === id);
+  if (!confirm('Remove "' + o.name + '"?')) return;
+  const msg = 'Removed: ' + o.name;
+  if (useSupabase) {
+    const result = await sb.del('opportunities?id=eq.' + id);
+    if (result === null) return;
+    await loadOpps();
+  } else {
+    opps = opps.filter(x => x.id !== id);
+  }
+  await writeChangelog(msg);
+  checkChangelog();
+  if (useSupabase) triggerEmailNotification(msg);
+  renderAdmin();
+  renderDashboard();
+  showToast('Removed');
+}
+function editOpp(id) { openModal(id); }
+
+// ── EMAIL TRIGGER ─────────────────────────────────────────────────────────────
+async function triggerEmailNotification(changeMsg) {
   try {
-    const r = await fetch(SUPABASE_URL + '/functions/v1/scan-orchestrator', { method:'POST', headers: { 'Authorization':'Bearer ' + session.access_token, 'apikey': SUPABASE_KEY, 'Content-Type':'application/json' }, body: '{}' });
-    const j = await r.json();
-    toast(j.ok ? 'Scan finished.' : 'Scan finished with problems — see Source health.', 5000);
-  } catch (e) { toast('Scan request failed: ' + e.message, 5000); }
-  b.disabled = false; b.textContent = 'Scan now'; loadDash();
+    await fetch(SUPABASE_URL + '/functions/v1/notify-subscribers', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + (RC_TOKEN || SUPABASE_ANON), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: changeMsg, total: opps.length }),
+    });
+  } catch(e) { console.warn('Email notification failed (non-fatal):', e); }
 }
 
-// ── opportunities ──
-async function loadOpps(){
-  const v = id => document.getElementById(id).value;
-  let q = db.from('scan_opportunities').select(LIST_COLS, { count:'exact' });
-  const prof = v('f-profile');
-  if (prof === '') q = q.neq('match_profiles', '{}'); else if (prof !== '__all') q = q.contains('match_profiles', [prof]);
-  if (v('f-source')) q = q.eq('source_id', v('f-source'));
-  const st = v('f-stage'); if (st === 'open') q = q.in('stage', ['active','upcoming','potential']); else if (st) q = q.eq('stage', st);
-  const dl = v('f-deadline'); if (dl === 'rolling') q = q.eq('deadline_rolling', true); else if (dl) q = q.gte('deadline', new Date().toISOString()).lte('deadline', new Date(Date.now() + dl*864e5).toISOString());
-  if (v('f-elig')) q = q.eq('eligibility_flag', v('f-elig'));
-  if (v('f-review')) q = q.eq('review_status', v('f-review'));
-  if (!document.getElementById('f-stale').checked) q = q.eq('is_stale', false);
-  const text = v('f-q').trim().replace(/[,()%*]/g, ' ');
-  if (text) q = q.or(`title.ilike.*${text}*,agency_name.ilike.*${text}*,recipient_name.ilike.*${text}*,description.ilike.*${text}*`);
-  q = q.order('deadline', { ascending:true, nullsFirst:false }).order('award_end_date', { ascending:true, nullsFirst:false }).limit(500);
-  document.getElementById('opps-table').innerHTML = '<div class="empty">Loading…</div>';
-  const { data, count: n, error } = await q;
-  if (error) { document.getElementById('opps-table').innerHTML = `<div class="empty">Could not load: ${esc(error.message)}</div>`; return; }
-  document.getElementById('opp-count').textContent = `${n ?? 0} ${n === 1 ? 'record' : 'records'}${n > 500 ? ' (first 500 shown)' : ''}`;
-  if (!data.length) { document.getElementById('opps-table').innerHTML = '<div class="empty">No opportunities match these filters.</div>'; return; }
-  document.getElementById('opps-table').innerHTML = `<table><tr><th>Opportunity</th><th>Source</th><th>Agency</th><th>Geography</th><th>Value</th><th>Deadline</th><th>Stage</th><th>Profiles</th></tr>${data.map(o => `<tr class="row" onclick="openDetail('${o.id}')">
-    <td style="max-width:420px"><div class="t-title">${esc(o.title)}</div><div>${eligPill(o)} ${reviewPill(o.review_status)}</div></td>
-    <td>${esc(SOURCES[o.source_id])}<div class="sub">${esc((o.opportunity_type||'').replace(/_/g,' '))}</div></td>
-    <td style="max-width:220px">${agency(o)}</td><td>${geo(o)}</td><td>${value(o)}</td><td style="white-space:nowrap">${deadline(o)}</td><td>${stagePill(o.stage)}</td>
-    <td class="sub" style="max-width:180px">${esc(profNames(o.match_profiles).join(', '))}</td></tr>`).join('')}</table>`;
-}
-
-// ── detail ──
-async function openDetail(id){
-  const [{ data: o }, { data: ch }] = await Promise.all([
-    db.from('scan_opportunities').select('*').eq('id', id).single(),
-    db.from('scan_changes').select('*').eq('opportunity_id', id).order('detected_at', { ascending:false }).limit(50),
-  ]);
-  if (!o) return toast('Could not open this record.');
-  current = o;
-  const amt = (label, v) => `<div>${label}</div><div>${v == null ? '<span class="sub">Unknown</span>' : money(Number(v))}</div>`;
-  const isAward = o.source_id === 'usaspending';
-  document.getElementById('drawer').innerHTML = `
-    <button class="close" onclick="closeDrawer()">×</button>
-    <div class="sub">${esc(SOURCES[o.source_id])} · ${esc((o.opportunity_type||'').replace(/_/g,' '))} ${o.solicitation_number ? '· ' + esc(o.solicitation_number) : ''}</div>
-    <h2>${esc(o.title)}</h2>
-    <div>${stagePill(o.stage)} ${eligPill(o)} ${reviewPill(o.review_status)} ${o.is_stale ? '<span class="pill p-check">stale</span>' : ''} ${o.no_longer_listed ? '<span class="pill p-check">no longer listed</span>' : ''}</div>
-    <div class="actions">
-      ${o.source_url ? `<a class="btn ghost small" href="${esc(o.source_url)}" target="_blank" rel="noopener">Open original ↗</a>` : ''}
-      ${['reviewing','pursue','pass','new'].map(s => `<button class="btn ghost small" onclick="setStatus('${s}')" ${o.review_status===s?'disabled':''}>${s === 'new' ? 'Reset' : s[0].toUpperCase()+s.slice(1)}</button>`).join('')}
-      ${o.pipeline_opportunity_id ? `<span class="pill p-ok" style="align-self:center">In BD pipeline (#${o.pipeline_opportunity_id})</span>` : `<button class="btn small" onclick="openPipe()">Send to pipeline</button>`}
-    </div>
-    <div class="kv">
-      <div>Agency</div><div>${agency(o)}</div>
-      ${isAward ? `<div>Recipient</div><div>${esc(o.recipient_name)} ${o.recipient_uei ? '<span class="sub">UEI ' + esc(o.recipient_uei) + '</span>' : ''}</div><div>Award period</div><div>${fdate(o.award_start_date)} – ${fdate(o.award_end_date)}</div>${amt('Award amount', o.award_ceiling)}` :
-      `<div>Deadline</div><div>${deadline(o)} ${o.deadline_text && !o.deadline_rolling ? '<div class="sub">' + esc(o.deadline_text) + '</div>' : ''}</div>
-      <div>Posted</div><div>${fdate(o.posted_date) || '—'}</div>${amt('Award ceiling', o.award_ceiling)}${amt('Award floor', o.award_floor)}${amt('Total program funding', o.total_program_funding)}
-      <div>Expected awards</div><div>${o.expected_awards ?? '<span class="sub">Unknown</span>'}</div>`}
-      <div>Geography</div><div>${geo(o) || '—'}</div>
-      <div>Assistance listings</div><div>${esc((o.assistance_listings||[]).join(', ') || '—')}</div>
-      ${o.naics_codes?.length ? `<div>NAICS</div><div>${esc(o.naics_codes.join(', '))}</div>` : ''}
-      <div>Eligibility</div><div>${esc(o.eligibility_text || '—')}</div>
-      <div>Matched profiles</div><div>${esc(profNames(o.match_profiles).join(', ') || 'None (captured for the archive)')}</div>
-      <div>First seen / last seen</div><div>${fdate(o.first_seen_at)} / ${fdate(o.last_seen_at)}</div>
-    </div>
-    <h3 style="font-size:14px;margin:18px 0 6px">Description</h3>
-    <div class="desc">${o.description ? esc(o.description) : '<span class="sub">' + (o.source_id === 'sam' ? 'SAM.gov descriptions are not fetched (each costs an API call). Open the original notice.' : 'No description provided.') + '</span>'}</div>
-    <h3 style="font-size:14px;margin:18px 0 6px">Internal notes</h3>
-    <textarea id="d-notes" rows="4" placeholder="Notes for the team">${esc(o.notes || '')}</textarea>
-    <div class="actions"><button class="btn small" onclick="saveNotes()">Save notes</button></div>
-    <h3 style="font-size:14px;margin:18px 0 6px">Change history</h3>
-    ${(ch||[]).length ? `<table>${ch.map(c => `<tr><td class="sub" style="white-space:nowrap">${fdate(c.detected_at)}</td><td><b>${esc(c.field)}</b>: ${esc(c.old_value ?? '—')} → ${esc(c.new_value ?? '—')}</td></tr>`).join('')}</table>` : '<div class="sub">No changes since first seen.</div>'}
-    <details style="margin-top:18px"><summary class="sub">Original source record</summary><pre style="font-size:11px;white-space:pre-wrap;background:#fafaf8;padding:10px;border-radius:8px">${esc(JSON.stringify(o.raw, null, 2))}</pre></details>`;
-  document.getElementById('shade').classList.add('on'); document.getElementById('drawer').classList.add('on');
-}
-function closeDrawer(){ document.getElementById('shade').classList.remove('on'); document.getElementById('drawer').classList.remove('on'); }
-async function setStatus(s){
-  const { error } = await db.from('scan_opportunities').update({ review_status: s, updated_at: new Date().toISOString() }).eq('id', current.id);
-  if (error) return toast('Could not update: ' + error.message);
-  toast('Marked ' + s); openDetail(current.id); if (document.getElementById('v-opps').classList.contains('on')) loadOpps();
-}
-async function saveNotes(){
-  const { error } = await db.from('scan_opportunities').update({ notes: document.getElementById('d-notes').value, updated_at: new Date().toISOString() }).eq('id', current.id);
-  toast(error ? 'Could not save: ' + error.message : 'Notes saved');
-}
-
-// ── send to pipeline ──
-function openPipe(){
-  const o = current, names = profNames(o.match_profiles);
-  const theme = names.some(n => /civil society/i.test(n)) ? 'Democracy / governance' : names.some(n => /systems/i.test(n)) ? 'Capacity building' : names.some(n => /consulting/i.test(n)) ? 'Learning / eval' : 'Other';
-  const top = o.source_id === 'sam' ? titleCase(o.top_level_agency) : (o.top_level_agency || '');
-  const sub = o.bureau || o.agency_name || '';
-  const amount = Number(o.award_ceiling ?? o.total_program_funding ?? 0);
-  const dl = o.deadline_rolling ? 'Rolling' : o.deadline ? fdate(o.deadline) : (o.award_end_date ? 'Award ends ' + fdate(o.award_end_date) : 'not listed');
-  document.getElementById('pp-name').value = o.title.slice(0, 200);
-  document.getElementById('pp-funder').value = top + (sub && sub !== top ? ' — ' + (o.source_id === 'sam' ? titleCase(sub) : sub) : '');
-  document.getElementById('pp-amount').value = Math.min(Math.round(amount), 2000000000);
-  document.getElementById('pp-theme').value = theme;
-  document.getElementById('pp-portfolio').value = 'Root Change'; document.getElementById('pp-status').value = 'Planned';
-  document.getElementById('pp-lead').value = 'Evan'; document.getElementById('pp-prob').value = 'Low';
-  document.getElementById('pp-notes').value = `From Opportunity Scanner (${SOURCES[o.source_id]}). Deadline: ${dl}.${o.solicitation_number ? ' Solicitation: ' + o.solicitation_number + '.' : ''}${amount ? '' : ' Amount unknown.'} ${o.source_url || ''}`.trim();
-  document.getElementById('pipe-modal').classList.add('on');
-}
-function closePipe(){ document.getElementById('pipe-modal').classList.remove('on'); }
-async function savePipe(){
-  const g = id => document.getElementById(id).value;
-  const btn = document.getElementById('pp-save'); btn.disabled = true;
-  const row = { name: g('pp-name'), funder: g('pp-funder'), portfolio: g('pp-portfolio'), status: g('pp-status'), amount: Math.max(0, Math.round(Number(g('pp-amount')) || 0)), theme: g('pp-theme'), lead: g('pp-lead'), prob: g('pp-prob'), notes: g('pp-notes'), decision_date: null, decision_window: '' };
-  const { data, error } = await db.from('opportunities').insert(row).select('id').single();
-  if (error) { btn.disabled = false; return toast('Could not add to pipeline: ' + error.message, 6000); }
-  await db.from('scan_opportunities').update({ pipeline_opportunity_id: data.id, review_status: 'in_pipeline', updated_at: new Date().toISOString() }).eq('id', current.id);
-  await db.from('changelog').insert({ message: 'Added from Opportunity Scanner: ' + row.name });
-  btn.disabled = false; closePipe(); toast('Added to the BD pipeline'); openDetail(current.id);
-}
-
-// ── profiles ──
-const LISTS = [['agency_codes','Agency codes (Grants.gov; prefix match)'],['assistance_listings','Assistance listings'],['naics_codes','NAICS codes'],['countries','Country codes'],['phrases','Phrases (match title + description)'],['negative_phrases','Negative phrases (title)'],['exclude_agencies','Exclude departments (SAM.gov)']];
-function renderProfiles(){
-  document.getElementById('profiles-list').innerHTML = profiles.map(p => `<div class="prof" id="pf-${p.id}">
-    <div style="display:flex;gap:10px;align-items:center"><input type="text" data-k="name" value="${esc(p.name)}" style="font-weight:600;font-size:15px;flex:1">
-      <label class="sub"><input type="checkbox" data-k="active" ${p.active?'checked':''}> active</label>
-      <button class="btn small" onclick="saveProfile('${p.id}')">Save</button></div>
-    <input type="text" data-k="description" value="${esc(p.description||'')}" style="width:100%;margin-top:8px" placeholder="Description">
-    <div class="chk">Sources: ${Object.entries(SOURCES).map(([k,l]) => `<label><input type="checkbox" data-src="${k}" ${(p.sources||[]).includes(k)?'checked':''}> ${l}</label>`).join('')}</div>
-    <div class="prof-grid">${LISTS.map(([k,l]) => `<div><label>${l}</label><textarea data-k="${k}">${esc((p[k]||[]).join('\n'))}</textarea></div>`).join('')}
-      <div><label>Minimum amount ($)</label><input type="number" data-k="min_amount" value="${p.min_amount ?? ''}" style="width:100%">
-        <div class="chk" style="flex-direction:column;gap:6px">
-          <label><input type="checkbox" data-k="include_unknown_amount" ${p.include_unknown_amount?'checked':''}> keep records with unknown amounts</label>
-          <label><input type="checkbox" data-k="phrase_match_any_agency" ${p.phrase_match_any_agency?'checked':''}> phrases match in any agency</label>
-          <label><input type="checkbox" data-k="agency_match_requires_phrase" ${p.agency_match_requires_phrase?'checked':''}> agency match also needs a phrase</label>
-        </div></div>
-    </div></div>`).join('') || '<div class="empty">No profiles yet.</div>';
-}
-async function saveProfile(id){
-  const el = document.getElementById('pf-' + id), f = k => el.querySelector(`[data-k="${k}"]`);
-  const upd = { name: f('name').value.trim(), description: f('description').value.trim(), active: f('active').checked,
-    sources: [...el.querySelectorAll('[data-src]')].filter(c => c.checked).map(c => c.dataset.src),
-    min_amount: f('min_amount').value === '' ? null : Number(f('min_amount').value),
-    include_unknown_amount: f('include_unknown_amount').checked, phrase_match_any_agency: f('phrase_match_any_agency').checked,
-    agency_match_requires_phrase: f('agency_match_requires_phrase').checked, updated_at: new Date().toISOString() };
-  LISTS.forEach(([k]) => upd[k] = f(k).value.split('\n').map(s => s.trim()).filter(Boolean));
-  const { error } = await db.from('scan_profiles').update(upd).eq('id', id);
-  if (error) return toast('Could not save: ' + error.message);
-  await loadProfiles(); toast('Profile saved — applies at the next scan');
-}
-async function addProfile(){
-  const { error } = await db.from('scan_profiles').insert({ name: 'New profile', description: '', sources: ['grantsgov'], sort_order: 100 + profiles.length });
-  if (error) return toast('Could not add: ' + error.message);
-  await loadProfiles(); renderProfiles();
-}
-
-document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeDrawer(); closePipe(); } });
-boot();
+document.getElementById('modal').addEventListener('click', e => { if (e.target === document.getElementById('modal')) closeModal(); });
+rcBoot();
 </script>
 </body>
 </html>
