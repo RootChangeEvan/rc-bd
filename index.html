@@ -217,7 +217,7 @@
 </style>
 </head>
 <body>
-<div id="rc-login" style="display:none"><h1>BD Pipeline</h1><div style="color:#6b6b68;font-size:13px">Root Change · sign in with your rootchange.org email. We'll send you a one-time link.</div><input type="email" id="rc-email" placeholder="you@rootchange.org"><button id="rc-btn" onclick="rcSendLink()">Email me a sign-in link</button><div id="rc-msg" style="margin-top:12px;font-size:12px;color:#6b6b68"></div></div>
+<div id="rc-login" style="display:none"><h1>BD Pipeline</h1><div style="color:#6b6b68;font-size:13px">Root Change · sign in with your rootchange.org email. We'll email you a one-time code.</div><input type="email" id="rc-email" placeholder="you@rootchange.org" onkeydown="if(event.key==='Enter')rcSendLink()"><button id="rc-btn" onclick="rcSendLink()">Email me a sign-in code</button><div id="rc-code-step" style="display:none;margin-top:16px"><div style="color:#6b6b68;font-size:13px">Enter the code from the email (check spam if it hasn't arrived).</div><input type="text" id="rc-code" inputmode="numeric" autocomplete="one-time-code" placeholder="123456" onkeydown="if(event.key==='Enter')rcVerify()"><button onclick="rcVerify()">Sign in</button></div><div id="rc-msg" style="margin-top:12px;font-size:12px;color:#6b6b68"></div></div>
 <div id="rc-app" style="display:none">
 
 <!-- CHANGELOG BANNER -->
@@ -488,7 +488,18 @@ async function rcSendLink() {
   const email = document.getElementById('rc-email').value.trim(), msg = document.getElementById('rc-msg');
   if (!/@rootchange\.org$/i.test(email)) { msg.textContent = 'Please use your rootchange.org email.'; return; }
   const { error } = await rcAuth.auth.signInWithOtp({ email, options: { emailRedirectTo: location.origin + location.pathname } });
-  msg.textContent = error ? 'Could not send link: ' + error.message : 'Check your inbox for a sign-in link from Supabase.';
+  if (error) { msg.textContent = 'Could not send the code: ' + error.message; return; }
+  msg.textContent = 'Code sent to ' + email + '.';
+  document.getElementById('rc-code-step').style.display = 'block';
+  document.getElementById('rc-code').focus();
+}
+async function rcVerify() {
+  const email = document.getElementById('rc-email').value.trim(), msg = document.getElementById('rc-msg');
+  const token = document.getElementById('rc-code').value.replace(/\s/g, '');
+  if (!/^\d{6,10}$/.test(token)) { msg.textContent = 'Enter the numeric code from the email.'; return; }
+  const { error } = await rcAuth.auth.verifyOtp({ email, token, type: 'email' });
+  if (error) { msg.textContent = 'That code did not work (' + error.message + '). Request a new one and use it within a few minutes.'; return; }
+  rcBoot();
 }
 async function rcSignOut() { await rcAuth.auth.signOut(); location.reload(); }
 
