@@ -8,7 +8,7 @@ BD pipeline dashboard and Opportunity Scanner for Root Change staff (rootchange.
 | | |
 |---|---|
 | Client / group | root-change-internal |
-| Last deployed | 2026-11-19 18:18 by RootChangeEvan |
+| Last deployed | 2026-11-19 18:22 by RootChangeEvan |
 | History | [CHANGELOG.md](CHANGELOG.md) |
 
 ### Files

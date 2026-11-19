@@ -2,6 +2,10 @@
 
 Every deploy adds an entry here, newest first.
 
+## 2026-11-19 18:22 · Update site
+
+**Updated:** `index.html`, `scanner.html`
+
 ## 2026-11-19 18:18 · Update site
 
 **Updated:** `index.html`

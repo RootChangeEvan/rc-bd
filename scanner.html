@@ -90,9 +90,14 @@
 
 <div id="login" style="display:none">
   <h1>Opportunity Scanner</h1>
-  <div class="sub">Root Change · sign in with your rootchange.org email. We'll send you a one-time link.</div>
-  <input type="email" id="login-email" placeholder="you@rootchange.org" autocomplete="email">
-  <button class="btn" id="login-btn" onclick="sendLink()">Email me a sign-in link</button>
+  <div class="sub">Root Change · sign in with your rootchange.org email. We'll email you a one-time code.</div>
+  <input type="email" id="login-email" placeholder="you@rootchange.org" autocomplete="email" onkeydown="if(event.key==='Enter')sendLink()">
+  <button class="btn" id="login-btn" onclick="sendLink()">Email me a sign-in code</button>
+  <div id="code-step" style="display:none;margin-top:16px">
+    <div class="sub">Enter the code from the email (check spam if it hasn't arrived).</div>
+    <input type="text" id="login-code" inputmode="numeric" autocomplete="one-time-code" placeholder="123456" onkeydown="if(event.key==='Enter')verifyCode()">
+    <button class="btn" id="code-btn" onclick="verifyCode()">Sign in</button>
+  </div>
   <div id="login-msg" class="note" style="margin-top:12px"></div>
 </div>
 
@@ -231,7 +236,20 @@ async function sendLink(){
   document.getElementById('login-btn').disabled = true;
   const { error } = await db.auth.signInWithOtp({ email, options: { emailRedirectTo: location.origin + location.pathname } });
   document.getElementById('login-btn').disabled = false;
-  msg.textContent = error ? 'Could not send link: ' + error.message : 'Check your inbox for a sign-in link from Supabase.';
+  if (error) { msg.textContent = 'Could not send the code: ' + error.message; return; }
+  msg.textContent = 'Code sent to ' + email + '.';
+  document.getElementById('code-step').style.display = 'block';
+  document.getElementById('login-code').focus();
+}
+async function verifyCode(){
+  const email = document.getElementById('login-email').value.trim();
+  const token = document.getElementById('login-code').value.replace(/\s/g, '');
+  const msg = document.getElementById('login-msg');
+  if (!/^\d{6,10}$/.test(token)) { msg.textContent = 'Enter the numeric code from the email.'; return; }
+  document.getElementById('code-btn').disabled = true;
+  const { error } = await db.auth.verifyOtp({ email, token, type: 'email' });
+  document.getElementById('code-btn').disabled = false;
+  if (error) msg.textContent = 'That code did not work (' + error.message + '). Request a new one and use it within a few minutes.';
 }
 async function signOut(){ await db.auth.signOut(); location.reload(); }
 
