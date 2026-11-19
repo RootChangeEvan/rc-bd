@@ -82,6 +82,13 @@
   #login { max-width:420px; margin:12vh auto; background:#fff; border:1px solid var(--border); border-radius:14px; padding:28px; }
   #login h1 { font-size:20px; margin:0 0 6px; }
   #login input { width:100%; margin:14px 0 10px; padding:10px 12px; font-size:14px; }
+  .fit { display:inline-block; min-width:34px; text-align:center; padding:3px 6px; border-radius:7px; font-weight:700; font-size:13px; }
+  .fit-hi { background:var(--green-light); color:#085041; } .fit-mid { background:var(--amber-light); color:var(--amber-dark); } .fit-lo { background:#f1f0ec; color:#555; }
+  .assess { border:1px solid var(--border); border-radius:10px; padding:14px 16px; margin:14px 0; background:#fcfcfb; }
+  .assess .big { font-size:30px; font-weight:700; }
+  .dim { display:grid; grid-template-columns:200px 1fr 34px; gap:8px; align-items:center; font-size:12.5px; margin:3px 0; }
+  .bar { height:7px; background:#eceae5; border-radius:4px; overflow:hidden; } .bar i { display:block; height:100%; background:var(--blue); }
+  .ev { font-size:13px; margin:6px 0; } .ev q { color:#444; font-style:italic; }
   .toast { position:fixed; bottom:22px; left:50%; transform:translateX(-50%); background:#1f2328; color:#fff; padding:10px 18px; border-radius:8px; font-size:13px; display:none; z-index:40; }
   .toast.on { display:block; }
 </style>
@@ -125,6 +132,7 @@
       <button class="btn" style="margin-left:auto" id="scan-btn" onclick="scanNow()">Scan now</button>
     </div>
     <div class="cards" id="stat-cards"></div>
+    <div class="panel"><h2>Best fit (Claude assessment, open opportunities)</h2><div id="topfit-list"></div></div>
     <div class="grid2">
       <div class="panel"><h2>Closing soonest (matched, open)</h2><div id="closing-list"></div></div>
       <div class="panel"><h2>Recent changes</h2><div id="changes-list"></div></div>
@@ -143,6 +151,8 @@
       <select id="f-deadline" onchange="loadOpps()"><option value="">Any deadline</option><option value="7">Closing in 7 days</option><option value="14">Closing in 14 days</option><option value="30">Closing in 30 days</option><option value="rolling">Rolling</option></select>
       <select id="f-elig" onchange="loadOpps()"><option value="">Any eligibility</option><option value="check">Check eligibility</option><option value="not_eligible_prime">Not eligible as prime</option></select>
       <select id="f-review" onchange="loadOpps()"><option value="">Any status</option><option value="new">New</option><option value="reviewing">Reviewing</option><option value="pursue">Pursue</option><option value="pass">Pass</option><option value="in_pipeline">In pipeline</option></select>
+      <select id="f-sort" onchange="loadOpps()"><option value="deadline">Sort: deadline</option><option value="fit">Sort: fit score</option></select>
+      <select id="f-fit" onchange="loadOpps()"><option value="">Any fit</option><option value="60">Fit 60+</option><option value="40">Fit 40+</option></select>
       <label class="sub"><input type="checkbox" id="f-stale" onchange="loadOpps()"> include stale</label>
       <span class="count" id="opp-count"></span>
     </div>
@@ -213,6 +223,9 @@ function agency(o){ const top = o.source_id === 'sam' ? titleCase(o.top_level_ag
 const stagePill = s => s ? `<span class="pill p-${esc(s)}">${esc(s)}</span>` : '';
 const eligPill = o => o.eligibility_flag === 'not_eligible_prime' ? `<span class="pill p-warn" title="${esc(o.set_aside||'')}">Not eligible as prime</span>` : '';
 const reviewPill = r => r && r !== 'new' ? `<span class="pill p-status">${esc(r.replace('_',' '))}</span>` : '';
+const fitBadge = a => a && a.fit_score != null ? `<span class="fit ${a.fit_score >= 60 ? 'fit-hi' : a.fit_score >= 40 ? 'fit-mid' : 'fit-lo'}" title="${esc(a.recommended_role || '')}">${a.fit_score}</span><div class="sub">${esc(a.recommended_role || '')}</div>` : '<span class="sub">—</span>';
+const DIM_LABELS = { technical_alignment:'Technical alignment (30%)', activities_deliverables:'Activities & deliverables (20%)', geographic_fit:'Geographic fit (15%)', eligibility_feasibility:'Eligibility & feasibility (15%)', financial_attractiveness:'Financial attractiveness (10%)', partnership_potential:'Partnership potential (10%)' };
+async function assessMap(ids){ if (!ids.length) return {}; const { data } = await db.from('scan_assessments').select('opportunity_id,fit_score,recommended_role,confidence,error').in('opportunity_id', ids); return Object.fromEntries((data||[]).map(a => [a.opportunity_id, a])); }
 const profNames = ids => (ids||[]).map(id => profiles.find(p => p.id === id)?.name).filter(Boolean);
 
 // ── auth ──
@@ -299,6 +312,8 @@ async function loadDash(){
     card('Closing in 7 / 14 / 30 days', `${n7} / ${n14} / ${n30}`, "jump({deadline:'30'})") +
     card('Under review / pursue', nReview, "jump({review:'reviewing'})") +
     card('Awards ending ≤ 18 months', nAwards, "jump({source:'usaspending'})");
+  const { data: top } = await db.from('scan_assessments').select('fit_score,recommended_role,opportunity_id,scan_opportunities!inner(id,title,source_id,stage,is_stale,deadline,deadline_rolling,deadline_text,deadline_tz,award_end_date,top_level_agency,bureau,agency_name)').not('fit_score','is',null).in('scan_opportunities.stage',['active','upcoming']).eq('scan_opportunities.is_stale', false).order('fit_score', { ascending:false }).limit(8);
+  document.getElementById('topfit-list').innerHTML = (top||[]).length ? `<table>${top.map(a => { const o = a.scan_opportunities; return `<tr class="row" onclick="openDetail('${o.id}')"><td style="width:70px">${fitBadge(a)}</td><td><div class="t-title">${esc(o.title)}</div><div class="sub">${esc(SOURCES[o.source_id])} · ${agency(o).replace(/<div class="sub">/,' · ').replace('</div>','')}</div></td><td style="white-space:nowrap">${deadline(o)}</td></tr>`; }).join('')}</table>` : '<div class="empty">No assessments yet. They run automatically after each scan.</div>';
   const { data: soon } = await matchedOpen(db.from('scan_opportunities').select(LIST_COLS)).gte('deadline', iso(0)).order('deadline').limit(8);
   document.getElementById('closing-list').innerHTML = (soon||[]).length ? `<table>${soon.map(o => `<tr class="row" onclick="openDetail('${o.id}')"><td><div class="t-title">${esc(o.title)}</div><div class="sub">${esc(SOURCES[o.source_id])} · ${agency(o).replace(/<div class="sub">/,' · ').replace('</div>','')}</div></td><td style="white-space:nowrap">${deadline(o)}</td></tr>`).join('')}</table>` : '<div class="empty">Nothing matched is closing soon.</div>';
   const { data: ch } = await db.from('scan_changes').select('field,old_value,new_value,detected_at,opportunity_id,scan_opportunities(title)').order('detected_at', { ascending:false }).limit(10);
@@ -347,9 +362,15 @@ async function loadOpps(){
   document.getElementById('opps-table').innerHTML = '<div class="empty">Loading…</div>';
   const { data, count: n, error } = await q;
   if (error) { document.getElementById('opps-table').innerHTML = `<div class="empty">Could not load: ${esc(error.message)}</div>`; return; }
+  const amap = await assessMap(data.map(o => o.id));
+  const minFit = Number(v('f-fit') || 0);
+  let rows = data.filter(o => !minFit || (amap[o.id]?.fit_score ?? -1) >= minFit);
+  if (v('f-sort') === 'fit') rows.sort((a, b) => (amap[b.id]?.fit_score ?? -1) - (amap[a.id]?.fit_score ?? -1));
   document.getElementById('opp-count').textContent = `${n ?? 0} ${n === 1 ? 'record' : 'records'}${n > 500 ? ' (first 500 shown)' : ''}`;
-  if (!data.length) { document.getElementById('opps-table').innerHTML = '<div class="empty">No opportunities match these filters.</div>'; return; }
-  document.getElementById('opps-table').innerHTML = `<table><tr><th>Opportunity</th><th>Source</th><th>Agency</th><th>Geography</th><th>Value</th><th>Deadline</th><th>Stage</th><th>Profiles</th></tr>${data.map(o => `<tr class="row" onclick="openDetail('${o.id}')">
+  if (minFit) document.getElementById('opp-count').textContent = `${rows.length} with fit ${minFit}+ (of ${n ?? 0})`;
+  if (!rows.length) { document.getElementById('opps-table').innerHTML = '<div class="empty">No opportunities match these filters.</div>'; return; }
+  document.getElementById('opps-table').innerHTML = `<table><tr><th>Fit</th><th>Opportunity</th><th>Source</th><th>Agency</th><th>Geography</th><th>Value</th><th>Deadline</th><th>Stage</th><th>Profiles</th></tr>${rows.map(o => `<tr class="row" onclick="openDetail('${o.id}')">
+    <td style="width:70px">${fitBadge(amap[o.id])}</td>
     <td style="max-width:420px"><div class="t-title">${esc(o.title)}</div><div>${eligPill(o)} ${reviewPill(o.review_status)}</div></td>
     <td>${esc(SOURCES[o.source_id])}<div class="sub">${esc((o.opportunity_type||'').replace(/_/g,' '))}</div></td>
     <td style="max-width:220px">${agency(o)}</td><td>${geo(o)}</td><td>${value(o)}</td><td style="white-space:nowrap">${deadline(o)}</td><td>${stagePill(o.stage)}</td>
@@ -358,9 +379,10 @@ async function loadOpps(){
 
 // ── detail ──
 async function openDetail(id){
-  const [{ data: o }, { data: ch }] = await Promise.all([
+  const [{ data: o }, { data: ch }, { data: asmt }] = await Promise.all([
     db.from('scan_opportunities').select('*').eq('id', id).single(),
     db.from('scan_changes').select('*').eq('opportunity_id', id).order('detected_at', { ascending:false }).limit(50),
+    db.from('scan_assessments').select('*').eq('opportunity_id', id).maybeSingle(),
   ]);
   if (!o) return toast('Could not open this record.');
   current = o;
@@ -376,6 +398,7 @@ async function openDetail(id){
       ${['reviewing','pursue','pass','new'].map(s => `<button class="btn ghost small" onclick="setStatus('${s}')" ${o.review_status===s?'disabled':''}>${s === 'new' ? 'Reset' : s[0].toUpperCase()+s.slice(1)}</button>`).join('')}
       ${o.pipeline_opportunity_id ? `<span class="pill p-ok" style="align-self:center">In BD pipeline (#${o.pipeline_opportunity_id})</span>` : `<button class="btn small" onclick="openPipe()">Send to pipeline</button>`}
     </div>
+    ${assessBlock(asmt)}
     <div class="kv">
       <div>Agency</div><div>${agency(o)}</div>
       ${isAward ? `<div>Recipient</div><div>${esc(o.recipient_name)} ${o.recipient_uei ? '<span class="sub">UEI ' + esc(o.recipient_uei) + '</span>' : ''}</div><div>Award period</div><div>${fdate(o.award_start_date)} – ${fdate(o.award_end_date)}</div>${amt('Award amount', o.award_ceiling)}` :
@@ -398,6 +421,31 @@ async function openDetail(id){
     ${(ch||[]).length ? `<table>${ch.map(c => `<tr><td class="sub" style="white-space:nowrap">${fdate(c.detected_at)}</td><td><b>${esc(c.field)}</b>: ${esc(c.old_value ?? '—')} → ${esc(c.new_value ?? '—')}</td></tr>`).join('')}</table>` : '<div class="sub">No changes since first seen.</div>'}
     <details style="margin-top:18px"><summary class="sub">Original source record</summary><pre style="font-size:11px;white-space:pre-wrap;background:#fafaf8;padding:10px;border-radius:8px">${esc(JSON.stringify(o.raw, null, 2))}</pre></details>`;
   document.getElementById('shade').classList.add('on'); document.getElementById('drawer').classList.add('on');
+}
+function assessBlock(a){
+  if (!a || a.fit_score == null) return `<div class="assess"><b>Claude fit assessment</b><div class="sub" style="margin:6px 0 10px">${a && a.error ? 'Last attempt failed: ' + esc(a.error) : 'Not assessed yet.'}</div><button class="btn small" id="assess-btn" onclick="runAssess()">Assess with Claude</button></div>`;
+  const list = (arr) => (arr||[]).length ? '<ul style="margin:4px 0 0 18px;padding:0">' + arr.map(x => `<li>${esc(x)}</li>`).join('') + '</ul>' : '<div class="sub">None noted.</div>';
+  return `<div class="assess">
+    <div style="display:flex;gap:16px;align-items:center">
+      <div><div class="big">${a.fit_score}</div><div class="sub">fit / 100</div></div>
+      <div><div><b>Recommended role: ${esc(a.recommended_role)}</b>${a.role_overridden ? ' <span class="pill p-warn">changed from Prime: not eligible as prime</span>' : ''}</div>
+        <div class="sub">Confidence: ${esc(a.confidence)} · ${esc(a.confidence_reason || '')}</div></div>
+      <button class="btn ghost small" style="margin-left:auto" id="assess-btn" onclick="runAssess()">Re-assess</button></div>
+    <p style="margin:12px 0 6px">${esc(a.summary)}</p>
+    <p style="margin:6px 0"><b>Root Change contribution:</b> ${esc(a.rc_contribution)}</p>
+    <div style="margin:12px 0">${Object.entries(DIM_LABELS).map(([k,l]) => `<div class="dim"><span>${l}</span><span class="bar"><i style="width:${a.dimensions?.[k] ?? 0}%"></i></span><span>${a.dimensions?.[k] ?? '—'}</span></div>`).join('')}</div>
+    <b>Evidence</b>${(a.evidence||[]).map(e => `<div class="ev">${e.verified ? '✓' : '<span title="Quote not found word-for-word in the notice">⚠</span>'} ${esc(e.point)}${e.quote ? ` <q>${esc(e.quote)}</q>` : ''}</div>`).join('') || '<div class="sub">None.</div>'}
+    <div class="grid2" style="margin-top:10px"><div><b>Gaps</b>${list(a.gaps)}</div><div><b>Eligibility concerns</b>${list(a.eligibility_concerns)}</div></div>
+    <div class="note" style="margin-top:10px">Screening heuristic, not a probability of winning. ✓ = quote found word-for-word in the notice. ${esc(a.model || '')} · ${fdate(a.created_at)}</div>
+  </div>`;
+}
+async function runAssess(){
+  const b = document.getElementById('assess-btn'); if (b) { b.disabled = true; b.textContent = 'Assessing… (about 20 seconds)'; }
+  try {
+    const r = await fetch(SUPABASE_URL + '/functions/v1/scan-assess', { method:'POST', headers: { 'Content-Type':'application/json', 'apikey': SUPABASE_KEY }, body: JSON.stringify({ ids: [current.id], force: true }) });
+    const j = await r.json(); if (!j.ok) toast('Assessment failed: ' + (j.results?.[0]?.error || j.error || 'unknown error'), 6000);
+  } catch (e) { toast('Assessment request failed: ' + e.message, 6000); }
+  openDetail(current.id);
 }
 function closeDrawer(){ document.getElementById('shade').classList.remove('on'); document.getElementById('drawer').classList.remove('on'); }
 async function setStatus(s){
