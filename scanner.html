@@ -112,7 +112,7 @@
   <div class="hdr-right">
     <a href="./">BD pipeline ↗</a>
     <span id="who"></span>
-    <a href="#" onclick="signOut();return false;">Sign out</a>
+    <a href="#" id="signout-link" onclick="signOut();return false;">Sign out</a>
   </div>
 </header>
 
@@ -216,7 +216,16 @@ const reviewPill = r => r && r !== 'new' ? `<span class="pill p-status">${esc(r.
 const profNames = ids => (ids||[]).map(id => profiles.find(p => p.id === id)?.name).filter(Boolean);
 
 // ── auth ──
+// TEMPORARY (Nov 19, 2026): sign-in switched off; password sign-in returns soon.
+const OPEN_ACCESS = true;
 async function boot(){
+  if (OPEN_ACCESS) {
+    document.getElementById('login').style.display = 'none';
+    document.getElementById('app').style.display = 'block';
+    document.getElementById('who').textContent = '';
+    document.getElementById('signout-link').style.display = 'none';
+    init(); return;
+  }
   const { data } = await db.auth.getSession();
   session = data.session;
   db.auth.onAuthStateChange((_e, s) => { const was = !!session; session = s; if (!!s !== was) render(); });
@@ -313,7 +322,7 @@ async function scanNow(){
   if (!confirm('Run a scan now? Grants.gov and USAspending take about a minute. SAM.gov uses part of its daily call allowance.')) return;
   b.disabled = true; b.textContent = 'Scanning…';
   try {
-    const r = await fetch(SUPABASE_URL + '/functions/v1/scan-orchestrator', { method:'POST', headers: { 'Authorization':'Bearer ' + session.access_token, 'apikey': SUPABASE_KEY, 'Content-Type':'application/json' }, body: '{}' });
+    const r = await fetch(SUPABASE_URL + '/functions/v1/scan-orchestrator', { method:'POST', headers: { 'Authorization':'Bearer ' + (session?.access_token || SUPABASE_KEY), 'apikey': SUPABASE_KEY, 'Content-Type':'application/json' }, body: '{}' });
     const j = await r.json();
     toast(j.ok ? 'Scan finished.' : 'Scan finished with problems — see Source health.', 5000);
   } catch (e) { toast('Scan request failed: ' + e.message, 5000); }

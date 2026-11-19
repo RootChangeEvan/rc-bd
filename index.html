@@ -474,7 +474,15 @@ const SUPABASE_URL  = 'https://bgnraddjhuoumvyjwgzj.supabase.co';
 const SUPABASE_ANON = 'sb_publishable_kroBXluUVUoSYYbJNugifQ_Hr5cFANt';
 let RC_TOKEN = null;
 const rcAuth = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+// TEMPORARY (Nov 19, 2026): sign-in switched off; password sign-in returns soon.
+const RC_OPEN_ACCESS = true;
 async function rcBoot() {
+  if (RC_OPEN_ACCESS) {
+    document.getElementById('rc-login').style.display = 'none';
+    document.getElementById('rc-app').style.display = 'block';
+    document.querySelectorAll('.rc-links a[onclick]').forEach(a => a.style.display = 'none');
+    init(); return;
+  }
   const { data } = await rcAuth.auth.getSession();
   rcAuth.auth.onAuthStateChange((_e, s) => { if (s) RC_TOKEN = s.access_token; });
   const s = data.session;
