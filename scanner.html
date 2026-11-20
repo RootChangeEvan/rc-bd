@@ -93,6 +93,9 @@
   .dial { background:#fff; border:1px solid var(--border); border-radius:var(--radius); padding:12px 14px 10px; text-align:center; }
   .dial h3 { font-size:13.5px; margin:0 0 2px; } .dial .val { font-size:20px; font-weight:700; margin-top:-6px; }
   .dial .trend { font-size:11.5px; color:var(--muted); margin-top:4px; }
+  .dial.click { cursor:pointer; transition:border-color .15s; } .dial.click:hover { border-color:var(--blue); }
+  .dial-link { font-size:12px; color:var(--blue); font-weight:600; margin-top:6px; }
+  .apill { display:inline-block; font-size:11px; padding:1px 7px; border-radius:10px; background:#e8f3ee; color:#1a6b4f; }
   .verdict { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:12px; padding-top:10px; border-top:1px solid var(--border); }
   .verdict input { flex:1; min-width:180px; }
   .vbtn { border:1px solid var(--border); background:#fff; border-radius:8px; padding:6px 10px; font-size:12.5px; cursor:pointer; }
@@ -159,8 +162,10 @@
   <section class="view" id="v-opps">
     <div class="filters">
       <input type="text" id="f-q" placeholder="Search title, agency, description" style="width:250px" onkeydown="if(event.key==='Enter')loadOpps()">
+      <select id="f-juris" onchange="syncSourceOptions(); loadOpps()" title="Federal, California, and other jurisdictions as sources are added"><option value="">All jurisdictions</option></select>
+      <select id="f-area" onchange="loadOpps()" title="Cross-cutting: opportunities where this capability area is a substantial part of the work"><option value="">Any capability area</option></select>
       <select id="f-profile" onchange="loadOpps()"><option value="">All profiles (matched)</option><option value="__all">Everything captured</option></select>
-      <select id="f-source" onchange="loadOpps()"><option value="">All sources</option><option value="grantsgov">Grants.gov</option><option value="sam">SAM.gov</option><option value="usaspending">USAspending (awards)</option><option value="cagrants">California Grants Portal</option></select>
+      <select id="f-source" onchange="loadOpps()"><option value="">All sources</option></select>
       <select id="f-stage" onchange="loadOpps()"><option value="open">Open + upcoming + potential</option><option value="active">Active</option><option value="upcoming">Upcoming</option><option value="potential">Potential (awards ending)</option><option value="closed">Closed</option><option value="">Any stage</option></select>
       <select id="f-deadline" onchange="loadOpps()"><option value="">Any deadline</option><option value="7">Closing in 7 days</option><option value="14">Closing in 14 days</option><option value="30">Closing in 30 days</option><option value="rolling">Rolling</option></select>
       <select id="f-elig" onchange="loadOpps()"><option value="">Any eligibility</option><option value="check">Check eligibility</option><option value="not_eligible_prime">Not eligible as prime</option></select>
@@ -214,7 +219,27 @@
 const SUPABASE_URL = 'https://bgnraddjhuoumvyjwgzj.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_kroBXluUVUoSYYbJNugifQ_Hr5cFANt';
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-const SOURCES = { grantsgov:'Grants.gov', sam:'SAM.gov', usaspending:'USAspending', cagrants:'California' };
+let SOURCES = { grantsgov:'Grants.gov', sam:'SAM.gov', usaspending:'USAspending', cagrants:'California' };
+let SRC_META = [];   // rows from scan_sources: id, name, short_label, jurisdiction
+const JURIS_LABEL = { federal:'Federal (US)', california:'California', multilateral:'Multilateral', foundation:'Foundations' };
+const jurisLabel = j => JURIS_LABEL[j] || (j ? j.replace(/_/g,' ').replace(/\b\w/g, c => c.toUpperCase()) : 'Other');
+async function loadSourceMeta(){
+  const { data } = await db.from('scan_sources').select('id,name,short_label,jurisdiction').order('id');
+  SRC_META = data || [];
+  SRC_META.forEach(r => { SOURCES[r.id] = r.short_label || r.name || r.id; });
+  const order = ['federal','california'];
+  const js = [...new Set(SRC_META.map(r => r.jurisdiction || 'other'))].sort((a,b) => ((order.indexOf(a)+1)||99) - ((order.indexOf(b)+1)||99) || a.localeCompare(b));
+  document.getElementById('f-juris').innerHTML = '<option value="">All jurisdictions</option>' + js.map(j => `<option value="${j}">${esc(jurisLabel(j))}</option>`).join('');
+  document.getElementById('f-area').innerHTML = '<option value="">Any capability area</option>' + AREAS.map(([k,l]) => `<option value="${k}">${esc(l)}</option>`).join('');
+  syncSourceOptions();
+}
+function syncSourceOptions(){
+  const j = document.getElementById('f-juris').value, sel = document.getElementById('f-source'), cur = sel.value;
+  const list = SRC_META.filter(r => !j || (r.jurisdiction || 'other') === j);
+  sel.innerHTML = '<option value="">All sources</option>' + list.map(r => `<option value="${r.id}">${esc(r.name || SOURCES[r.id])}</option>`).join('');
+  sel.value = list.some(r => r.id === cur) ? cur : '';
+}
+const jurisSources = j => SRC_META.filter(r => (r.jurisdiction || 'other') === j).map(r => r.id);
 const LIST_COLS = 'id,source_id,title,agency_name,top_level_agency,bureau,country_codes,states,geography_text,opportunity_type,stage,deadline,deadline_tz,deadline_rolling,deadline_text,award_ceiling,total_program_funding,value_unknown,eligibility_flag,set_aside,match_profiles,review_status,award_end_date,recipient_name,is_stale,first_seen_at,last_changed_at';
 let profiles = [], session = null, current = null;
 
@@ -235,6 +260,7 @@ function deadline(o){
 function geo(o){ const g = [...(o.country_codes||[]), ...(o.states||[])].join(', '); return esc(g || o.geography_text || ''); }
 function agency(o){ const top = o.source_id === 'sam' ? titleCase(o.top_level_agency) : (o.top_level_agency || ''); const sub = o.bureau || o.agency_name || ''; return esc(top) + (sub && sub !== top ? '<div class="sub">' + esc(o.source_id==='sam' ? titleCase(sub) : sub) + '</div>' : ''); }
 const stagePill = s => s ? `<span class="pill p-${esc(s)}">${esc(s)}</span>` : '';
+const areaPill = (o, k) => { const t = Array.isArray(o.scan_tags) ? o.scan_tags[0] : o.scan_tags; const v = t ? t[k] : 0; return v >= 2 ? `<span class="apill">${v >= 3 ? 'Central' : 'Substantial'}: ${esc(AREAS.find(a => a[0] === k)[1])}</span>` : ''; };
 const eligPill = o => o.eligibility_flag === 'not_eligible_prime' ? `<span class="pill p-warn" title="${esc(o.set_aside||'')}">Not eligible as prime</span>` : '';
 const reviewPill = r => r && r !== 'new' ? `<span class="pill p-status">${esc(r === 'pass' ? 'dismissed' : r.replace('_',' '))}</span>` : '';
 const fitBadge = a => a && a.fit_score != null ? `<span class="fit ${a.fit_score >= 60 ? 'fit-hi' : a.fit_score >= 40 ? 'fit-mid' : 'fit-lo'}" title="${esc(a.recommended_role || '')}">${a.fit_score}</span><div class="sub">${esc(a.recommended_role || '')}</div>` : '<span class="sub">—</span>';
@@ -264,6 +290,8 @@ async function loadDials(){
   const n = p => data.find(r => r.period_start === p)?.records ?? 0;
   const complete = periods.filter(p => data.find(r => r.period_start === p).period_end < today && n(p) >= MIN);
   const cur = complete.at(-1), partial = periods.find(p => p > (cur || '') && data.find(r => r.period_start === p).period_end >= today);
+  const openByArea = {};
+  await Promise.all(AREAS.map(async ([k]) => { const { count } = await db.from('scan_opportunities').select('id,scan_tags!inner(' + k + ')', { count:'exact', head:true }).gte('scan_tags.' + k, 2).in('stage', ['active','upcoming']).eq('is_stale', false).neq('review_status', 'pass'); openByArea[k] = count; }));
   el.innerHTML = AREAS.map(([k, label]) => {
     const rows = data.filter(r => r.area === k);
     const at = p => rows.find(r => r.period_start === p);
@@ -276,11 +304,11 @@ async function loadDials(){
     const color = base == null ? '#6b6b68' : status === 'rising' ? '#1D9E75' : status === 'falling' ? '#c0392b' : '#7a5300';
     const hist = rows.filter(r => r.records >= MIN).slice(-5).map(r => `${periodLabel(r.period_start).split('–')[0]} ${pct(Number(r.share))}`).join(' · ');
     const p = partial ? at(partial) : null;
-    return `<div class="dial"><h3>${label}</h3>${gauge(v, base, max)}<div class="val">${c ? pct(v) : '—'}</div>
+    return `<div class="dial click" onclick="jump({area:'${k}'})" title="See open opportunities where ${esc(label)} is a substantial part of the work"><h3>${label}</h3>${gauge(v, base, max)}<div class="val">${c ? pct(v) : '—'}</div>
       <div class="trend"><b style="color:${color}">${status}</b>${base != null ? ` vs. ${pct(base)} average before` : ''}</div>
-      <div class="trend">${hist}</div>${p ? `<div class="trend">${periodLabel(partial)} so far: ${pct(Number(p.share))} (${p.records} notices)</div>` : ''}</div>`;
+      <div class="trend">${hist}</div>${p ? `<div class="trend">${periodLabel(partial)} so far: ${pct(Number(p.share))} (${p.records} notices)</div>` : ''}<div class="dial-link">${openByArea[k] ?? 0} open opportunities →</div></div>`;
   }).join('');
-  document.getElementById('dials-note').innerHTML = cur ? `Needle: ${periodLabel(cur)} (${n(cur)} solicitations from Grants.gov and SAM.gov). Black tick = average of earlier periods; green = more than 20% above it, red = more than 20% below. Early periods only include notices that were still listed when the scanner started (Nov 2026), so trends firm up over the next few snapshots. Snapshots refresh every two months.` : 'Not enough tagged solicitations in a completed period yet.';
+  document.getElementById('dials-note').innerHTML = cur ? `Click a dial to see open opportunities in that area, across all sources. Needle: ${periodLabel(cur)} (${n(cur)} federal solicitations from Grants.gov and SAM.gov; trends stay federal-only so they compare over time). Black tick = average of earlier periods; green = more than 20% above it, red = more than 20% below. Early periods only include notices that were still listed when the scanner started (Nov 2026), so trends firm up over the next few snapshots. Snapshots refresh every two months.` : 'Not enough tagged solicitations in a completed period yet.';
 }
 function ensureFitOption(v){ const sel = document.getElementById('f-fit'); if (![...sel.options].some(o => o.value === String(v))) sel.insertAdjacentHTML('beforeend', `<option value="${v}">Fit ${v}+</option>`); }
 async function setMinFit(v){
@@ -370,7 +398,7 @@ function show(v){
 let started = false;
 async function init(){
   if (started) return; started = true;
-  await loadProfiles();
+  await Promise.all([loadProfiles(), loadSourceMeta()]);
   const sel = document.getElementById('f-profile');
   profiles.forEach(p => sel.insertAdjacentHTML('beforeend', `<option value="${p.id}">${esc(p.name)}</option>`));
   loadDash();
@@ -428,7 +456,10 @@ async function loadDash(){
   document.getElementById('last-scan').textContent = 'Last successful scan ' + ago(lastOk) + (lastOk ? ' · ' + new Date(lastOk).toLocaleString('en-US', { weekday:'short', month:'short', day:'numeric', hour:'numeric', minute:'2-digit' }) : '');
 }
 function jump(f){
-  ['f-q','f-profile','f-source','f-deadline','f-elig'].forEach(id => document.getElementById(id).value = '');
+  ['f-q','f-profile','f-juris','f-area','f-deadline','f-elig'].forEach(id => document.getElementById(id).value = '');
+  syncSourceOptions(); document.getElementById('f-source').value = '';
+  if (f.juris) { document.getElementById('f-juris').value = f.juris; syncSourceOptions(); }
+  if (f.area) { document.getElementById('f-area').value = f.area; document.getElementById('f-profile').value = '__all'; document.getElementById('f-sort').value = 'fit'; }
   document.getElementById('f-review').value = '__open';
   document.getElementById('f-stage').value = 'open';
   if (f.deadline) document.getElementById('f-deadline').value = f.deadline;
@@ -453,7 +484,10 @@ async function scanNow(){
 // ── opportunities ──
 async function loadOpps(){
   const v = id => document.getElementById(id).value;
-  let q = db.from('scan_opportunities').select(LIST_COLS, { count:'exact' });
+  const area = v('f-area');
+  let q = db.from('scan_opportunities').select(LIST_COLS + (area ? ',scan_tags!inner(networks,governance,learning,resilience)' : ''), { count:'exact' });
+  if (area) q = q.gte('scan_tags.' + area, 2);
+  if (v('f-juris')) q = q.in('source_id', jurisSources(v('f-juris')));
   const prof = v('f-profile');
   if (prof === '') q = q.neq('match_profiles', '{}'); else if (prof !== '__all') q = q.contains('match_profiles', [prof]);
   if (v('f-source')) q = q.eq('source_id', v('f-source'));
@@ -474,10 +508,11 @@ async function loadOpps(){
   if (v('f-sort') === 'fit') rows.sort((a, b) => (amap[b.id]?.fit_score ?? -1) - (amap[a.id]?.fit_score ?? -1));
   document.getElementById('opp-count').textContent = `${n ?? 0} ${n === 1 ? 'record' : 'records'}${n > 500 ? ' (first 500 shown)' : ''}`;
   if (minFit) document.getElementById('opp-count').textContent = `${rows.length} with fit ${minFit}+ (of ${n ?? 0})`;
+  if (area) document.getElementById('opp-count').textContent += ' · ' + AREAS.find(a => a[0] === area)[1] + ' is substantial or central';
   if (!rows.length) { document.getElementById('opps-table').innerHTML = '<div class="empty">No opportunities match these filters.</div>'; return; }
   document.getElementById('opps-table').innerHTML = `<table><tr><th>Fit</th><th>Opportunity</th><th>Source</th><th>Agency</th><th>Geography</th><th>Value</th><th>Deadline</th><th>Stage</th><th>Profiles</th></tr>${rows.map(o => `<tr class="row" onclick="openDetail('${o.id}')">
     <td style="width:70px">${fitBadge(amap[o.id])}</td>
-    <td style="max-width:420px"><div class="t-title">${esc(o.title)}</div><div>${eligPill(o)} ${reviewPill(o.review_status)}</div></td>
+    <td style="max-width:420px"><div class="t-title">${esc(o.title)}</div><div>${area ? areaPill(o, area) : ''} ${eligPill(o)} ${reviewPill(o.review_status)}</div></td>
     <td>${esc(SOURCES[o.source_id])}<div class="sub">${esc((o.opportunity_type||'').replace(/_/g,' '))}</div></td>
     <td style="max-width:220px">${agency(o)}</td><td>${geo(o)}</td><td>${value(o)}</td><td style="white-space:nowrap">${deadline(o)}</td><td>${stagePill(o.stage)}</td>
     <td class="sub" style="max-width:180px">${esc(profNames(o.match_profiles).join(', '))}</td></tr>`).join('')}</table>`;
