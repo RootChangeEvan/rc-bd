@@ -146,8 +146,8 @@
     <div class="cards" id="stat-cards"></div>
     <div class="panel"><h2>Best fit (Claude assessment, open opportunities)</h2><div class="note" id="calib-line" style="margin:-4px 0 8px"></div><div id="topfit-list"></div></div>
     <div class="grid2">
-      <div class="panel"><h2>Closing soonest (matched, open)</h2><div id="closing-list"></div></div>
-      <div class="panel"><h2>Recent changes</h2><div id="changes-list"></div></div>
+      <div class="panel"><h2>Closing soonest <span class="sub" style="font-weight:400">· fit 40+ or marked worth a look</span></h2><div id="closing-list"></div></div>
+      <div class="panel"><h2>Recent changes <span class="sub" style="font-weight:400">· relevant opportunities only</span></h2><div id="changes-list"></div></div>
     </div>
     <div class="panel"><h2>Source health</h2><div id="sources-table"></div>
       <div class="note" style="margin-top:8px">A failed source is shown here, never as zero results. Scheduled scans: Monday and Thursday, about 6:15 a.m. Eastern (USAspending Mondays only).</div></div>
@@ -162,7 +162,7 @@
       <select id="f-stage" onchange="loadOpps()"><option value="open">Open + upcoming + potential</option><option value="active">Active</option><option value="upcoming">Upcoming</option><option value="potential">Potential (awards ending)</option><option value="closed">Closed</option><option value="">Any stage</option></select>
       <select id="f-deadline" onchange="loadOpps()"><option value="">Any deadline</option><option value="7">Closing in 7 days</option><option value="14">Closing in 14 days</option><option value="30">Closing in 30 days</option><option value="rolling">Rolling</option></select>
       <select id="f-elig" onchange="loadOpps()"><option value="">Any eligibility</option><option value="check">Check eligibility</option><option value="not_eligible_prime">Not eligible as prime</option></select>
-      <select id="f-review" onchange="loadOpps()"><option value="">Any status</option><option value="new">New</option><option value="reviewing">Reviewing</option><option value="pursue">Pursue</option><option value="pass">Pass</option><option value="in_pipeline">In pipeline</option></select>
+      <select id="f-review" onchange="loadOpps()"><option value="__open" selected>All except dismissed</option><option value="new">New</option><option value="reviewing">Reviewing</option><option value="pursue">Pursue</option><option value="in_pipeline">In pipeline</option><option value="pass">Dismissed (not for us / pass)</option><option value="">Any status</option></select>
       <select id="f-sort" onchange="loadOpps()"><option value="deadline">Sort: deadline</option><option value="fit">Sort: fit score</option></select>
       <select id="f-fit" onchange="loadOpps()"><option value="">Any fit</option><option value="60">Fit 60+</option><option value="40">Fit 40+</option></select>
       <label class="sub"><input type="checkbox" id="f-stale" onchange="loadOpps()"> include stale</label>
@@ -234,7 +234,7 @@ function geo(o){ const g = [...(o.country_codes||[]), ...(o.states||[])].join(',
 function agency(o){ const top = o.source_id === 'sam' ? titleCase(o.top_level_agency) : (o.top_level_agency || ''); const sub = o.bureau || o.agency_name || ''; return esc(top) + (sub && sub !== top ? '<div class="sub">' + esc(o.source_id==='sam' ? titleCase(sub) : sub) + '</div>' : ''); }
 const stagePill = s => s ? `<span class="pill p-${esc(s)}">${esc(s)}</span>` : '';
 const eligPill = o => o.eligibility_flag === 'not_eligible_prime' ? `<span class="pill p-warn" title="${esc(o.set_aside||'')}">Not eligible as prime</span>` : '';
-const reviewPill = r => r && r !== 'new' ? `<span class="pill p-status">${esc(r.replace('_',' '))}</span>` : '';
+const reviewPill = r => r && r !== 'new' ? `<span class="pill p-status">${esc(r === 'pass' ? 'dismissed' : r.replace('_',' '))}</span>` : '';
 const fitBadge = a => a && a.fit_score != null ? `<span class="fit ${a.fit_score >= 60 ? 'fit-hi' : a.fit_score >= 40 ? 'fit-mid' : 'fit-lo'}" title="${esc(a.recommended_role || '')}">${a.fit_score}</span><div class="sub">${esc(a.recommended_role || '')}</div>` : '<span class="sub">—</span>';
 const DIM_LABELS = { technical_alignment:'Technical alignment (30%)', activities_deliverables:'Activities & deliverables (20%)', geographic_fit:'Geographic fit (15%)', eligibility_feasibility:'Eligibility & feasibility (15%)', financial_attractiveness:'Financial attractiveness (10%)', partnership_potential:'Partnership potential (10%)' };
 async function assessMap(ids){ if (!ids.length) return {}; const { data } = await db.from('scan_assessments').select('opportunity_id,fit_score,recommended_role,confidence,error').in('opportunity_id', ids); return Object.fromEntries((data||[]).map(a => [a.opportunity_id, a])); }
@@ -284,7 +284,10 @@ async function saveVerdict(id, verdict, score, inputId){
   const reason = inputId ? (document.getElementById(inputId)?.value || '').trim() : '';
   const { error } = await db.from('scan_verdicts').upsert({ opportunity_id: id, verdict, reason: reason || null, fit_score_at_verdict: score, created_at: new Date().toISOString() }, { onConflict: 'opportunity_id' });
   if (error) return toast('Could not save verdict: ' + error.message);
-  toast(verdict === 'worth_a_look' ? 'Saved: worth a look' : 'Saved: not for us');
+  const { data: cur } = await db.from('scan_opportunities').select('review_status').eq('id', id).single();
+  const next = verdict === 'not_for_us' ? (['pursue','in_pipeline'].includes(cur?.review_status) ? cur.review_status : 'pass') : (['new','pass'].includes(cur?.review_status) ? 'reviewing' : cur?.review_status);
+  if (next && next !== cur?.review_status) await db.from('scan_opportunities').update({ review_status: next, updated_at: new Date().toISOString() }).eq('id', id);
+  toast(verdict === 'worth_a_look' ? 'Saved: worth a look (moved to Reviewing)' : 'Saved: not for us (dismissed; find it under Status → Dismissed)');
   if (current && current.id === id && document.getElementById('drawer').classList.contains('on')) openDetail(id);
   if (document.getElementById('v-dash').classList.contains('on')) loadDash();
 }
@@ -367,10 +370,14 @@ async function init(){
 async function loadProfiles(){ const { data } = await db.from('scan_profiles').select('*').order('sort_order'); profiles = data || []; }
 
 // ── dashboard ──
-function matchedOpen(q){ return q.neq('match_profiles', '{}').eq('is_stale', false).in('stage', ['active','upcoming','potential']); }
+const RELEVANT = 40; // minimum Claude fit score for dashboard lists
+function matchedOpen(q){ return q.neq('match_profiles', '{}').eq('is_stale', false).neq('review_status', 'pass').in('stage', ['active','upcoming','potential']); }
+const KEEP_STATUSES = ['reviewing','pursue','in_pipeline'];
 async function count(build){ const { count } = await build(db.from('scan_opportunities').select('id', { count:'exact', head:true })); return count ?? 0; }
 async function loadDash(){
   loadDials(); loadCalibration();
+  const { data: vlist } = await db.from('scan_verdicts').select('opportunity_id,verdict');
+  const vmap = Object.fromEntries((vlist||[]).map(x => [x.opportunity_id, x.verdict]));
   const now = new Date(), iso = d => new Date(now.getTime() + d*864e5).toISOString();
   const [nMatched, nNew, n7, n14, n30, nReview, nAwards] = await Promise.all([
     count(q => matchedOpen(q)),
@@ -388,14 +395,17 @@ async function loadDash(){
     card('Closing in 7 / 14 / 30 days', `${n7} / ${n14} / ${n30}`, "jump({deadline:'30'})") +
     card('Under review / pursue', nReview, "jump({review:'reviewing'})") +
     card('Awards ending ≤ 18 months', nAwards, "jump({source:'usaspending'})");
-  const { data: vlist } = await db.from('scan_verdicts').select('opportunity_id,verdict');
-  const vmap = Object.fromEntries((vlist||[]).map(x => [x.opportunity_id, x.verdict]));
-  const { data: top } = await db.from('scan_assessments').select('fit_score,recommended_role,opportunity_id,scan_opportunities!inner(id,title,source_id,stage,is_stale,deadline,deadline_rolling,deadline_text,deadline_tz,award_end_date,top_level_agency,bureau,agency_name)').not('fit_score','is',null).in('scan_opportunities.stage',['active','upcoming']).eq('scan_opportunities.is_stale', false).order('fit_score', { ascending:false }).limit(10);
+  const { data: top0 } = await db.from('scan_assessments').select('fit_score,recommended_role,opportunity_id,scan_opportunities!inner(id,title,source_id,stage,is_stale,review_status,deadline,deadline_rolling,deadline_text,deadline_tz,award_end_date,top_level_agency,bureau,agency_name)').not('fit_score','is',null).in('scan_opportunities.stage',['active','upcoming']).eq('scan_opportunities.is_stale', false).neq('scan_opportunities.review_status','pass').order('fit_score', { ascending:false }).limit(30);
+  const top = (top0||[]).filter(a => vmap[a.opportunity_id] !== 'not_for_us').slice(0, 10);
   document.getElementById('topfit-list').innerHTML = (top||[]).length ? `<table>${top.map(a => { const o = a.scan_opportunities; return `<tr class="row" onclick="openDetail('${o.id}')"><td style="width:70px">${fitBadge(a)}</td><td><div class="t-title">${esc(o.title)}</div><div class="sub">${esc(SOURCES[o.source_id])} · ${agency(o).replace(/<div class="sub">/,' · ').replace('</div>','')}</div></td><td style="white-space:nowrap">${deadline(o)}</td><td style="white-space:nowrap" onclick="event.stopPropagation()"><button class="vbtn ${vmap[o.id]==='worth_a_look'?'on-yes':''}" onclick="saveVerdict('${o.id}','worth_a_look',${a.fit_score})">👍 Worth a look</button> <button class="vbtn ${vmap[o.id]==='not_for_us'?'on-no':''}" onclick="saveVerdict('${o.id}','not_for_us',${a.fit_score})">👎 Not for us</button></td></tr>`; }).join('')}</table><div class="note" style="margin-top:6px">Open an item to add a reason with your verdict. Reasons teach the scoring the most.</div>` : '<div class="empty">No assessments yet. They run automatically after each scan.</div>';
-  const { data: soon } = await matchedOpen(db.from('scan_opportunities').select(LIST_COLS)).gte('deadline', iso(0)).order('deadline').limit(8);
-  document.getElementById('closing-list').innerHTML = (soon||[]).length ? `<table>${soon.map(o => `<tr class="row" onclick="openDetail('${o.id}')"><td><div class="t-title">${esc(o.title)}</div><div class="sub">${esc(SOURCES[o.source_id])} · ${agency(o).replace(/<div class="sub">/,' · ').replace('</div>','')}</div></td><td style="white-space:nowrap">${deadline(o)}</td></tr>`).join('')}</table>` : '<div class="empty">Nothing matched is closing soon.</div>';
-  const { data: ch } = await db.from('scan_changes').select('field,old_value,new_value,detected_at,opportunity_id,scan_opportunities(title)').order('detected_at', { ascending:false }).limit(10);
-  document.getElementById('changes-list').innerHTML = (ch||[]).length ? `<table>${ch.map(c => `<tr class="row" onclick="openDetail('${c.opportunity_id}')"><td><div class="t-title">${esc(c.scan_opportunities?.title || '')}</div><div class="sub">${esc(c.field)}: ${esc((c.old_value||'—').slice(0,40))} → ${esc((c.new_value||'—').slice(0,40))}</div></td><td class="sub" style="white-space:nowrap">${ago(c.detected_at)}</td></tr>`).join('')}</table>` : '<div class="empty">No changes detected yet.</div>';
+  const { data: soon0 } = await matchedOpen(db.from('scan_opportunities').select(LIST_COLS)).gte('deadline', iso(0)).order('deadline').limit(80);
+  const smap = await assessMap((soon0||[]).map(o => o.id));
+  const soon = (soon0||[]).filter(o => (smap[o.id]?.fit_score ?? -1) >= RELEVANT || KEEP_STATUSES.includes(o.review_status) || vmap[o.id] === 'worth_a_look').slice(0, 8);
+  document.getElementById('closing-list').innerHTML = (soon||[]).length ? `<table>${soon.map(o => `<tr class="row" onclick="openDetail('${o.id}')"><td><div class="t-title">${esc(o.title)}</div><div class="sub">${esc(SOURCES[o.source_id])} · ${agency(o).replace(/<div class="sub">/,' · ').replace('</div>','')}</div></td><td style="white-space:nowrap">${deadline(o)}</td></tr>`).join('')}</table>` : '<div class="empty">Nothing relevant (fit ' + RELEVANT + '+ or marked worth a look) is closing soon.</div>';
+  const { data: ch0 } = await db.from('scan_changes').select('field,old_value,new_value,detected_at,opportunity_id,scan_opportunities(title,review_status)').order('detected_at', { ascending:false }).limit(150);
+  const cmap = await assessMap([...new Set((ch0||[]).map(c => c.opportunity_id))]);
+  const ch = (ch0||[]).filter(c => c.scan_opportunities?.review_status !== 'pass' && ((cmap[c.opportunity_id]?.fit_score ?? -1) >= RELEVANT || KEEP_STATUSES.includes(c.scan_opportunities?.review_status) || vmap[c.opportunity_id] === 'worth_a_look')).slice(0, 10);
+  document.getElementById('changes-list').innerHTML = (ch||[]).length ? `<table>${ch.map(c => `<tr class="row" onclick="openDetail('${c.opportunity_id}')"><td><div class="t-title">${esc(c.scan_opportunities?.title || '')}</div><div class="sub">${esc(c.field)}: ${esc((c.old_value||'—').slice(0,40))} → ${esc((c.new_value||'—').slice(0,40))}</div></td><td class="sub" style="white-space:nowrap">${ago(c.detected_at)}</td></tr>`).join('')}</table>` : '<div class="empty">No changes to relevant opportunities yet.</div>';
   const [{ data: srcs }, { data: runs }] = await Promise.all([ db.from('scan_sources').select('*').order('id'), db.from('scan_runs').select('*').order('started_at', { ascending:false }).limit(30) ]);
   const latest = id => (runs||[]).find(r => r.source_id === id);
   document.getElementById('sources-table').innerHTML = `<table><tr><th>Source</th><th>Last run</th><th>Result</th><th>Found / new / changed</th><th>Last success</th><th>API calls today</th></tr>${(srcs||[]).map(s => { const r = latest(s.id); const st = r ? r.status : 'never'; const cls = st==='success'?'p-ok':st==='partial'?'p-partial':st==='running'?'p-check':'p-fail'; return `<tr><td><b>${esc(s.name)}</b>${s.enabled?'':' <span class="sub">(off)</span>'}</td><td>${ago(s.last_run_at)}</td><td><span class="pill ${cls}">${esc(st)}</span>${r&&r.error?`<div class="sub" style="max-width:340px">${esc(r.error)}</div>`:''}</td><td>${r?`${r.records_found} / ${r.records_new} / ${r.records_changed}`:'—'}</td><td>${ago(s.last_success_at)}</td><td>${s.daily_call_budget ? `${s.calls_date === new Date().toISOString().slice(0,10) ? s.calls_today : 0} of ${s.daily_call_budget}` : '<span class="sub">no limit</span>'}</td></tr>`; }).join('')}</table>`;
@@ -403,7 +413,8 @@ async function loadDash(){
   document.getElementById('last-scan').textContent = 'Last successful scan ' + ago(lastOk) + (lastOk ? ' · ' + new Date(lastOk).toLocaleString('en-US', { weekday:'short', month:'short', day:'numeric', hour:'numeric', minute:'2-digit' }) : '');
 }
 function jump(f){
-  ['f-q','f-profile','f-source','f-deadline','f-elig','f-review'].forEach(id => document.getElementById(id).value = '');
+  ['f-q','f-profile','f-source','f-deadline','f-elig'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('f-review').value = '__open';
   document.getElementById('f-stage').value = 'open';
   if (f.deadline) document.getElementById('f-deadline').value = f.deadline;
   if (f.review) document.getElementById('f-review').value = f.review;
@@ -432,7 +443,7 @@ async function loadOpps(){
   const st = v('f-stage'); if (st === 'open') q = q.in('stage', ['active','upcoming','potential']); else if (st) q = q.eq('stage', st);
   const dl = v('f-deadline'); if (dl === 'rolling') q = q.eq('deadline_rolling', true); else if (dl) q = q.gte('deadline', new Date().toISOString()).lte('deadline', new Date(Date.now() + dl*864e5).toISOString());
   if (v('f-elig')) q = q.eq('eligibility_flag', v('f-elig'));
-  if (v('f-review')) q = q.eq('review_status', v('f-review'));
+  if (v('f-review') === '__open') q = q.neq('review_status', 'pass'); else if (v('f-review')) q = q.eq('review_status', v('f-review'));
   if (!document.getElementById('f-stale').checked) q = q.eq('is_stale', false);
   const text = v('f-q').trim().replace(/[,()%*]/g, ' ');
   if (text) q = q.or(`title.ilike.*${text}*,agency_name.ilike.*${text}*,recipient_name.ilike.*${text}*,description.ilike.*${text}*`);
