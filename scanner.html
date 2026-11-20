@@ -144,9 +144,11 @@
       <div class="dials" id="dials"></div>
       <div class="note" id="dials-note"></div></div>
     <div class="cards" id="stat-cards"></div>
-    <div class="panel"><h2>Best fit (Claude assessment, open opportunities)</h2><div class="note" id="calib-line" style="margin:-4px 0 8px"></div><div id="topfit-list"></div></div>
+    <div class="panel"><h2 style="display:flex;align-items:center;gap:10px">Best fit <span class="sub" style="font-weight:400">· Claude assessment, open opportunities</span>
+      <label class="sub" style="margin-left:auto;font-weight:400">Dashboard shows fit
+        <select id="min-fit" onchange="setMinFit(this.value)"><option>40</option><option>45</option><option>50</option><option>55</option><option>60</option></select> and above</label></h2><div class="note" id="calib-line" style="margin:-4px 0 8px"></div><div id="topfit-list"></div></div>
     <div class="grid2">
-      <div class="panel"><h2>Closing soonest <span class="sub" style="font-weight:400">· fit 40+ or marked worth a look</span></h2><div id="closing-list"></div></div>
+      <div class="panel"><h2>Closing soonest <span class="sub" style="font-weight:400">· fit <span class="minfit-label">50</span>+ or marked worth a look</span></h2><div id="closing-list"></div></div>
       <div class="panel"><h2>Recent changes <span class="sub" style="font-weight:400">· relevant opportunities only</span></h2><div id="changes-list"></div></div>
     </div>
     <div class="panel"><h2>Source health</h2><div id="sources-table"></div>
@@ -280,6 +282,12 @@ async function loadDials(){
   }).join('');
   document.getElementById('dials-note').innerHTML = cur ? `Needle: ${periodLabel(cur)} (${n(cur)} solicitations from Grants.gov and SAM.gov). Black tick = average of earlier periods; green = more than 20% above it, red = more than 20% below. Early periods only include notices that were still listed when the scanner started (Nov 2026), so trends firm up over the next few snapshots. Snapshots refresh every two months.` : 'Not enough tagged solicitations in a completed period yet.';
 }
+function ensureFitOption(v){ const sel = document.getElementById('f-fit'); if (![...sel.options].some(o => o.value === String(v))) sel.insertAdjacentHTML('beforeend', `<option value="${v}">Fit ${v}+</option>`); }
+async function setMinFit(v){
+  RELEVANT = Number(v);
+  await db.from('scan_settings').upsert({ key:'dashboard_min_fit', value:String(v), updated_at:new Date().toISOString() }, { onConflict:'key' });
+  toast('Dashboard now shows fit ' + v + ' and above'); loadDash();
+}
 async function saveVerdict(id, verdict, score, inputId){
   const reason = inputId ? (document.getElementById(inputId)?.value || '').trim() : '';
   const { error } = await db.from('scan_verdicts').upsert({ opportunity_id: id, verdict, reason: reason || null, fit_score_at_verdict: score, created_at: new Date().toISOString() }, { onConflict: 'opportunity_id' });
@@ -370,15 +378,21 @@ async function init(){
 async function loadProfiles(){ const { data } = await db.from('scan_profiles').select('*').order('sort_order'); profiles = data || []; }
 
 // ── dashboard ──
-const RELEVANT = 40; // minimum Claude fit score for dashboard lists
+let RELEVANT = 50; // minimum Claude fit score for dashboard lists (saved in scan_settings.dashboard_min_fit)
 function matchedOpen(q){ return q.neq('match_profiles', '{}').eq('is_stale', false).neq('review_status', 'pass').in('stage', ['active','upcoming','potential']); }
 const KEEP_STATUSES = ['reviewing','pursue','in_pipeline'];
 async function count(build){ const { count } = await build(db.from('scan_opportunities').select('id', { count:'exact', head:true })); return count ?? 0; }
 async function loadDash(){
+  const { data: mf } = await db.from('scan_settings').select('value').eq('key','dashboard_min_fit').maybeSingle();
+  if (mf && !isNaN(Number(mf.value))) RELEVANT = Number(mf.value);
+  const sel = document.getElementById('min-fit'); if (sel) sel.value = String(RELEVANT);
+  document.querySelectorAll('.minfit-label').forEach(e => e.textContent = RELEVANT);
   loadDials(); loadCalibration();
   const { data: vlist } = await db.from('scan_verdicts').select('opportunity_id,verdict');
   const vmap = Object.fromEntries((vlist||[]).map(x => [x.opportunity_id, x.verdict]));
   const now = new Date(), iso = d => new Date(now.getTime() + d*864e5).toISOString();
+  const { data: fitRows } = await db.from('scan_assessments').select('opportunity_id,fit_score,scan_opportunities!inner(stage,is_stale,review_status)').gte('fit_score', RELEVANT).in('scan_opportunities.stage',['active','upcoming']).eq('scan_opportunities.is_stale', false).neq('scan_opportunities.review_status','pass');
+  const nFit = (fitRows||[]).length;
   const [nMatched, nNew, n7, n14, n30, nReview, nAwards] = await Promise.all([
     count(q => matchedOpen(q)),
     count(q => matchedOpen(q).gte('first_seen_at', iso(-7))),
@@ -390,18 +404,19 @@ async function loadDash(){
   ]);
   const card = (k, v, f) => `<div class="card ${f?'click':''}" ${f?`onclick="${f}"`:''}><div class="k">${k}</div><div class="v">${v}</div></div>`;
   document.getElementById('stat-cards').innerHTML =
+    card('Fit ' + RELEVANT + '+ (open)', nFit, "jump({fit:true})") +
     card('Matched & open', nMatched, "jump({})") +
     card('New in last 7 days', nNew) +
     card('Closing in 7 / 14 / 30 days', `${n7} / ${n14} / ${n30}`, "jump({deadline:'30'})") +
     card('Under review / pursue', nReview, "jump({review:'reviewing'})") +
     card('Awards ending ≤ 18 months', nAwards, "jump({source:'usaspending'})");
   const { data: top0 } = await db.from('scan_assessments').select('fit_score,recommended_role,opportunity_id,scan_opportunities!inner(id,title,source_id,stage,is_stale,review_status,deadline,deadline_rolling,deadline_text,deadline_tz,award_end_date,top_level_agency,bureau,agency_name)').not('fit_score','is',null).in('scan_opportunities.stage',['active','upcoming']).eq('scan_opportunities.is_stale', false).neq('scan_opportunities.review_status','pass').order('fit_score', { ascending:false }).limit(30);
-  const top = (top0||[]).filter(a => vmap[a.opportunity_id] !== 'not_for_us').slice(0, 10);
-  document.getElementById('topfit-list').innerHTML = (top||[]).length ? `<table>${top.map(a => { const o = a.scan_opportunities; return `<tr class="row" onclick="openDetail('${o.id}')"><td style="width:70px">${fitBadge(a)}</td><td><div class="t-title">${esc(o.title)}</div><div class="sub">${esc(SOURCES[o.source_id])} · ${agency(o).replace(/<div class="sub">/,' · ').replace('</div>','')}</div></td><td style="white-space:nowrap">${deadline(o)}</td><td style="white-space:nowrap" onclick="event.stopPropagation()"><button class="vbtn ${vmap[o.id]==='worth_a_look'?'on-yes':''}" onclick="saveVerdict('${o.id}','worth_a_look',${a.fit_score})">👍 Worth a look</button> <button class="vbtn ${vmap[o.id]==='not_for_us'?'on-no':''}" onclick="saveVerdict('${o.id}','not_for_us',${a.fit_score})">👎 Not for us</button></td></tr>`; }).join('')}</table><div class="note" style="margin-top:6px">Open an item to add a reason with your verdict. Reasons teach the scoring the most.</div>` : '<div class="empty">No assessments yet. They run automatically after each scan.</div>';
+  const top = (top0||[]).filter(a => vmap[a.opportunity_id] !== 'not_for_us' && a.fit_score >= RELEVANT).slice(0, 10);
+  document.getElementById('topfit-list').innerHTML = (top||[]).length ? `<table>${top.map(a => { const o = a.scan_opportunities; return `<tr class="row" onclick="openDetail('${o.id}')"><td style="width:70px">${fitBadge(a)}</td><td><div class="t-title">${esc(o.title)}</div><div class="sub">${esc(SOURCES[o.source_id])} · ${agency(o).replace(/<div class="sub">/,' · ').replace('</div>','')}</div></td><td style="white-space:nowrap">${deadline(o)}</td><td style="white-space:nowrap" onclick="event.stopPropagation()"><button class="vbtn ${vmap[o.id]==='worth_a_look'?'on-yes':''}" onclick="saveVerdict('${o.id}','worth_a_look',${a.fit_score})">👍 Worth a look</button> <button class="vbtn ${vmap[o.id]==='not_for_us'?'on-no':''}" onclick="saveVerdict('${o.id}','not_for_us',${a.fit_score})">👎 Not for us</button></td></tr>`; }).join('')}</table><div class="note" style="margin-top:6px">Open an item to add a reason with your verdict. Reasons teach the scoring the most.</div>` : '<div class="empty">No open opportunities score ' + RELEVANT + ' or higher right now. Lower the minimum above, or browse Opportunities sorted by fit.</div>';
   const { data: soon0 } = await matchedOpen(db.from('scan_opportunities').select(LIST_COLS)).gte('deadline', iso(0)).order('deadline').limit(80);
   const smap = await assessMap((soon0||[]).map(o => o.id));
   const soon = (soon0||[]).filter(o => (smap[o.id]?.fit_score ?? -1) >= RELEVANT || KEEP_STATUSES.includes(o.review_status) || vmap[o.id] === 'worth_a_look').slice(0, 8);
-  document.getElementById('closing-list').innerHTML = (soon||[]).length ? `<table>${soon.map(o => `<tr class="row" onclick="openDetail('${o.id}')"><td><div class="t-title">${esc(o.title)}</div><div class="sub">${esc(SOURCES[o.source_id])} · ${agency(o).replace(/<div class="sub">/,' · ').replace('</div>','')}</div></td><td style="white-space:nowrap">${deadline(o)}</td></tr>`).join('')}</table>` : '<div class="empty">Nothing relevant (fit ' + RELEVANT + '+ or marked worth a look) is closing soon.</div>';
+  document.getElementById('closing-list').innerHTML = (soon||[]).length ? `<table>${soon.map(o => `<tr class="row" onclick="openDetail('${o.id}')"><td><div class="t-title">${esc(o.title)}</div><div class="sub">${esc(SOURCES[o.source_id])} · ${agency(o).replace(/<div class="sub">/,' · ').replace('</div>','')}</div></td><td style="white-space:nowrap">${deadline(o)}</td></tr>`).join('')}</table>` : '<div class="empty">Nothing with fit ' + RELEVANT + '+ (or marked worth a look) is closing soon.</div>';
   const { data: ch0 } = await db.from('scan_changes').select('field,old_value,new_value,detected_at,opportunity_id,scan_opportunities(title,review_status)').order('detected_at', { ascending:false }).limit(150);
   const cmap = await assessMap([...new Set((ch0||[]).map(c => c.opportunity_id))]);
   const ch = (ch0||[]).filter(c => c.scan_opportunities?.review_status !== 'pass' && ((cmap[c.opportunity_id]?.fit_score ?? -1) >= RELEVANT || KEEP_STATUSES.includes(c.scan_opportunities?.review_status) || vmap[c.opportunity_id] === 'worth_a_look')).slice(0, 10);
@@ -419,6 +434,8 @@ function jump(f){
   if (f.deadline) document.getElementById('f-deadline').value = f.deadline;
   if (f.review) document.getElementById('f-review').value = f.review;
   if (f.source) document.getElementById('f-source').value = f.source;
+  document.getElementById('f-fit').value = f.fit ? String(RELEVANT >= 60 ? 60 : RELEVANT >= 40 ? (RELEVANT >= 50 ? '' : 40) : '') : '';
+  if (f.fit) { document.getElementById('f-sort').value = 'fit'; ensureFitOption(RELEVANT); document.getElementById('f-fit').value = String(RELEVANT); }
   show('opps');
 }
 async function scanNow(){
