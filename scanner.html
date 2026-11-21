@@ -149,9 +149,9 @@
     <div class="cards" id="stat-cards"></div>
     <div class="panel"><h2 style="display:flex;align-items:center;gap:10px">Best fit <span class="sub" style="font-weight:400">· Claude assessment, open opportunities</span>
       <label class="sub" style="margin-left:auto;font-weight:400">Dashboard shows fit
-        <select id="min-fit" onchange="setMinFit(this.value)"><option>40</option><option>45</option><option>50</option><option>55</option><option>60</option></select> and above</label></h2><div class="note" id="calib-line" style="margin:-4px 0 8px"></div><div id="topfit-list"></div></div>
+        <select id="min-fit" onchange="setMinFit(this.value)"><option>60</option><option>65</option><option>70</option><option>75</option><option>80</option></select> and above</label></h2><div class="note" id="calib-line" style="margin:-4px 0 8px"></div><div id="topfit-list"></div></div>
     <div class="grid2">
-      <div class="panel"><h2>Closing soonest <span class="sub" style="font-weight:400">· fit <span class="minfit-label">50</span>+ or marked worth a look</span></h2><div id="closing-list"></div></div>
+      <div class="panel"><h2>Closing soonest <span class="sub" style="font-weight:400">· fit <span class="minfit-label">60</span>+</span></h2><div id="closing-list"></div></div>
       <div class="panel"><h2>Recent changes <span class="sub" style="font-weight:400">· relevant opportunities only</span></h2><div id="changes-list"></div></div>
     </div>
     <div class="panel"><h2>Source health</h2><div id="sources-table"></div>
@@ -171,7 +171,7 @@
       <select id="f-elig" onchange="loadOpps()"><option value="">Any eligibility</option><option value="check">Check eligibility</option><option value="not_eligible_prime">Not eligible as prime</option></select>
       <select id="f-review" onchange="loadOpps()"><option value="__open" selected>All except dismissed</option><option value="new">New</option><option value="reviewing">Reviewing</option><option value="pursue">Pursue</option><option value="in_pipeline">In pipeline</option><option value="pass">Dismissed (not for us / pass)</option><option value="">Any status</option></select>
       <select id="f-sort" onchange="loadOpps()"><option value="deadline">Sort: deadline</option><option value="fit">Sort: fit score</option></select>
-      <select id="f-fit" onchange="loadOpps()"><option value="">Any fit</option><option value="60">Fit 60+</option><option value="40">Fit 40+</option></select>
+      <select id="f-fit" onchange="loadOpps()"><option value="60">Fit 60+</option><option value="65">Fit 65+</option><option value="70">Fit 70+</option><option value="75">Fit 75+</option><option value="80">Fit 80+</option></select>
       <label class="sub"><input type="checkbox" id="f-stale" onchange="loadOpps()"> include stale</label>
       <span class="count" id="opp-count"></span>
     </div>
@@ -291,7 +291,7 @@ async function loadDials(){
   const complete = periods.filter(p => data.find(r => r.period_start === p).period_end < today && n(p) >= MIN);
   const cur = complete.at(-1), partial = periods.find(p => p > (cur || '') && data.find(r => r.period_start === p).period_end >= today);
   const openByArea = {};
-  await Promise.all(AREAS.map(async ([k]) => { const { count } = await db.from('scan_opportunities').select('id,scan_tags!inner(' + k + ')', { count:'exact', head:true }).gte('scan_tags.' + k, 2).in('stage', ['active','upcoming']).eq('is_stale', false).neq('review_status', 'pass'); openByArea[k] = count; }));
+  await Promise.all(AREAS.map(async ([k]) => { const { count } = await db.from('scan_opportunities').select('id,scan_tags!inner(' + k + '),scan_assessments!inner(fit_score)', { count:'exact', head:true }).gte('scan_tags.' + k, 2).gte('scan_assessments.fit_score', FLOOR).in('stage', ['active','upcoming']).eq('is_stale', false).neq('review_status', 'pass'); openByArea[k] = count; }));
   el.innerHTML = AREAS.map(([k, label]) => {
     const rows = data.filter(r => r.area === k);
     const at = p => rows.find(r => r.period_start === p);
@@ -306,13 +306,13 @@ async function loadDials(){
     const p = partial ? at(partial) : null;
     return `<div class="dial click" onclick="jump({area:'${k}'})" title="See open opportunities where ${esc(label)} is a substantial part of the work"><h3>${label}</h3>${gauge(v, base, max)}<div class="val">${c ? pct(v) : '—'}</div>
       <div class="trend"><b style="color:${color}">${status}</b>${base != null ? ` vs. ${pct(base)} average before` : ''}</div>
-      <div class="trend">${hist}</div>${p ? `<div class="trend">${periodLabel(partial)} so far: ${pct(Number(p.share))} (${p.records} notices)</div>` : ''}<div class="dial-link">${openByArea[k] ?? 0} open opportunities →</div></div>`;
+      <div class="trend">${hist}</div>${p ? `<div class="trend">${periodLabel(partial)} so far: ${pct(Number(p.share))} (${p.records} notices)</div>` : ''}<div class="dial-link">${openByArea[k] ?? 0} open at fit ${FLOOR}+ →</div></div>`;
   }).join('');
   document.getElementById('dials-note').innerHTML = cur ? `Click a dial to see open opportunities in that area, across all sources. Needle: ${periodLabel(cur)} (${n(cur)} federal solicitations from Grants.gov and SAM.gov; trends stay federal-only so they compare over time). Black tick = average of earlier periods; green = more than 20% above it, red = more than 20% below. Early periods only include notices that were still listed when the scanner started (Nov 2026), so trends firm up over the next few snapshots. Snapshots refresh every two months.` : 'Not enough tagged solicitations in a completed period yet.';
 }
 function ensureFitOption(v){ const sel = document.getElementById('f-fit'); if (![...sel.options].some(o => o.value === String(v))) sel.insertAdjacentHTML('beforeend', `<option value="${v}">Fit ${v}+</option>`); }
 async function setMinFit(v){
-  RELEVANT = Number(v);
+  RELEVANT = Math.max(FLOOR, Number(v));
   await db.from('scan_settings').upsert({ key:'dashboard_min_fit', value:String(v), updated_at:new Date().toISOString() }, { onConflict:'key' });
   toast('Dashboard now shows fit ' + v + ' and above'); loadDash();
 }
@@ -406,48 +406,42 @@ async function init(){
 async function loadProfiles(){ const { data } = await db.from('scan_profiles').select('*').order('sort_order'); profiles = data || []; }
 
 // ── dashboard ──
-let RELEVANT = 50; // minimum Claude fit score for dashboard lists (saved in scan_settings.dashboard_min_fit)
+const FLOOR = 60;  // nothing below this fit score is shown anywhere on the page; lower-scoring records stay stored for queries
+let RELEVANT = FLOOR; // dashboard minimum (saved in scan_settings.dashboard_min_fit; never below FLOOR)
 function matchedOpen(q){ return q.neq('match_profiles', '{}').eq('is_stale', false).neq('review_status', 'pass').in('stage', ['active','upcoming','potential']); }
 const KEEP_STATUSES = ['reviewing','pursue','in_pipeline'];
 async function count(build){ const { count } = await build(db.from('scan_opportunities').select('id', { count:'exact', head:true })); return count ?? 0; }
 async function loadDash(){
   const { data: mf } = await db.from('scan_settings').select('value').eq('key','dashboard_min_fit').maybeSingle();
-  if (mf && !isNaN(Number(mf.value))) RELEVANT = Number(mf.value);
+  RELEVANT = Math.max(FLOOR, mf && !isNaN(Number(mf.value)) ? Number(mf.value) : FLOOR);
   const sel = document.getElementById('min-fit'); if (sel) sel.value = String(RELEVANT);
   document.querySelectorAll('.minfit-label').forEach(e => e.textContent = RELEVANT);
   loadDials(); loadCalibration();
   const { data: vlist } = await db.from('scan_verdicts').select('opportunity_id,verdict');
   const vmap = Object.fromEntries((vlist||[]).map(x => [x.opportunity_id, x.verdict]));
   const now = new Date(), iso = d => new Date(now.getTime() + d*864e5).toISOString();
-  const { data: fitRows } = await db.from('scan_assessments').select('opportunity_id,fit_score,scan_opportunities!inner(stage,is_stale,review_status)').gte('fit_score', RELEVANT).in('scan_opportunities.stage',['active','upcoming']).eq('scan_opportunities.is_stale', false).neq('scan_opportunities.review_status','pass');
-  const nFit = (fitRows||[]).length;
-  const [nMatched, nNew, n7, n14, n30, nReview, nAwards] = await Promise.all([
-    count(q => matchedOpen(q)),
-    count(q => matchedOpen(q).gte('first_seen_at', iso(-7))),
-    count(q => matchedOpen(q).gte('deadline', iso(0)).lte('deadline', iso(7))),
-    count(q => matchedOpen(q).gte('deadline', iso(0)).lte('deadline', iso(14))),
-    count(q => matchedOpen(q).gte('deadline', iso(0)).lte('deadline', iso(30))),
-    count(q => q.in('review_status', ['reviewing','pursue'])),
-    count(q => matchedOpen(q).eq('source_id','usaspending')),
-  ]);
+  const { data: fitRows } = await db.from('scan_assessments').select('opportunity_id,fit_score,scan_opportunities!inner(stage,is_stale,review_status,first_seen_at,deadline)').gte('fit_score', RELEVANT).in('scan_opportunities.stage',['active','upcoming']).eq('scan_opportunities.is_stale', false).neq('scan_opportunities.review_status','pass');
+  const fr = (fitRows||[]).map(r => r.scan_opportunities);
+  const nFit = fr.length;
+  const within = d => fr.filter(o => o.deadline && o.deadline >= iso(0) && o.deadline <= iso(d)).length;
+  const nNew = fr.filter(o => o.first_seen_at >= iso(-7)).length, n7 = within(7), n14 = within(14), n30 = within(30);
+  const nReview = fr.filter(o => ['reviewing','pursue'].includes(o.review_status)).length;
   const card = (k, v, f) => `<div class="card ${f?'click':''}" ${f?`onclick="${f}"`:''}><div class="k">${k}</div><div class="v">${v}</div></div>`;
   document.getElementById('stat-cards').innerHTML =
     card('Fit ' + RELEVANT + '+ (open)', nFit, "jump({fit:true})") +
-    card('Matched & open', nMatched, "jump({})") +
-    card('New in last 7 days', nNew) +
-    card('Closing in 7 / 14 / 30 days', `${n7} / ${n14} / ${n30}`, "jump({deadline:'30'})") +
-    card('Under review / pursue', nReview, "jump({review:'reviewing'})") +
-    card('Awards ending ≤ 18 months', nAwards, "jump({source:'usaspending'})");
+    card('New in last 7 days', nNew, "jump({fit:true})") +
+    card('Closing in 7 / 14 / 30 days', `${n7} / ${n14} / ${n30}`, "jump({deadline:'30', fit:true})") +
+    card('Under review / pursue', nReview, "jump({review:'reviewing', fit:true})");
   const { data: top0 } = await db.from('scan_assessments').select('fit_score,recommended_role,opportunity_id,scan_opportunities!inner(id,title,source_id,stage,is_stale,review_status,deadline,deadline_rolling,deadline_text,deadline_tz,award_end_date,top_level_agency,bureau,agency_name)').not('fit_score','is',null).in('scan_opportunities.stage',['active','upcoming']).eq('scan_opportunities.is_stale', false).neq('scan_opportunities.review_status','pass').order('fit_score', { ascending:false }).limit(30);
   const top = (top0||[]).filter(a => vmap[a.opportunity_id] !== 'not_for_us' && a.fit_score >= RELEVANT).slice(0, 10);
-  document.getElementById('topfit-list').innerHTML = (top||[]).length ? `<table>${top.map(a => { const o = a.scan_opportunities; return `<tr class="row" onclick="openDetail('${o.id}')"><td style="width:70px">${fitBadge(a)}</td><td><div class="t-title">${esc(o.title)}</div><div class="sub">${esc(SOURCES[o.source_id])} · ${agency(o).replace(/<div class="sub">/,' · ').replace('</div>','')}</div></td><td style="white-space:nowrap">${deadline(o)}</td><td style="white-space:nowrap" onclick="event.stopPropagation()"><button class="vbtn ${vmap[o.id]==='worth_a_look'?'on-yes':''}" onclick="saveVerdict('${o.id}','worth_a_look',${a.fit_score})">👍 Worth a look</button> <button class="vbtn ${vmap[o.id]==='not_for_us'?'on-no':''}" onclick="saveVerdict('${o.id}','not_for_us',${a.fit_score})">👎 Not for us</button></td></tr>`; }).join('')}</table><div class="note" style="margin-top:6px">Open an item to add a reason with your verdict. Reasons teach the scoring the most.</div>` : '<div class="empty">No open opportunities score ' + RELEVANT + ' or higher right now. Lower the minimum above, or browse Opportunities sorted by fit.</div>';
+  document.getElementById('topfit-list').innerHTML = (top||[]).length ? `<table>${top.map(a => { const o = a.scan_opportunities; return `<tr class="row" onclick="openDetail('${o.id}')"><td style="width:70px">${fitBadge(a)}</td><td><div class="t-title">${esc(o.title)}</div><div class="sub">${esc(SOURCES[o.source_id])} · ${agency(o).replace(/<div class="sub">/,' · ').replace('</div>','')}</div></td><td style="white-space:nowrap">${deadline(o)}</td><td style="white-space:nowrap" onclick="event.stopPropagation()"><button class="vbtn ${vmap[o.id]==='worth_a_look'?'on-yes':''}" onclick="saveVerdict('${o.id}','worth_a_look',${a.fit_score})">👍 Worth a look</button> <button class="vbtn ${vmap[o.id]==='not_for_us'?'on-no':''}" onclick="saveVerdict('${o.id}','not_for_us',${a.fit_score})">👎 Not for us</button></td></tr>`; }).join('')}</table><div class="note" style="margin-top:6px">Open an item to add a reason with your verdict. Reasons teach the scoring the most.</div>` : '<div class="empty">No open opportunities score ' + RELEVANT + ' or higher right now. Lower-scoring items are stored; ask Claude to query them.</div>';
   const { data: soon0 } = await matchedOpen(db.from('scan_opportunities').select(LIST_COLS)).gte('deadline', iso(0)).order('deadline').limit(80);
   const smap = await assessMap((soon0||[]).map(o => o.id));
-  const soon = (soon0||[]).filter(o => (smap[o.id]?.fit_score ?? -1) >= RELEVANT || KEEP_STATUSES.includes(o.review_status) || vmap[o.id] === 'worth_a_look').slice(0, 8);
-  document.getElementById('closing-list').innerHTML = (soon||[]).length ? `<table>${soon.map(o => `<tr class="row" onclick="openDetail('${o.id}')"><td><div class="t-title">${esc(o.title)}</div><div class="sub">${esc(SOURCES[o.source_id])} · ${agency(o).replace(/<div class="sub">/,' · ').replace('</div>','')}</div></td><td style="white-space:nowrap">${deadline(o)}</td></tr>`).join('')}</table>` : '<div class="empty">Nothing with fit ' + RELEVANT + '+ (or marked worth a look) is closing soon.</div>';
+  const soon = (soon0||[]).filter(o => (smap[o.id]?.fit_score ?? -1) >= RELEVANT).slice(0, 8);
+  document.getElementById('closing-list').innerHTML = (soon||[]).length ? `<table>${soon.map(o => `<tr class="row" onclick="openDetail('${o.id}')"><td><div class="t-title">${esc(o.title)}</div><div class="sub">${esc(SOURCES[o.source_id])} · ${agency(o).replace(/<div class="sub">/,' · ').replace('</div>','')}</div></td><td style="white-space:nowrap">${deadline(o)}</td></tr>`).join('')}</table>` : '<div class="empty">Nothing with fit ' + RELEVANT + '+ is closing soon.</div>';
   const { data: ch0 } = await db.from('scan_changes').select('field,old_value,new_value,detected_at,opportunity_id,scan_opportunities(title,review_status)').order('detected_at', { ascending:false }).limit(150);
   const cmap = await assessMap([...new Set((ch0||[]).map(c => c.opportunity_id))]);
-  const ch = (ch0||[]).filter(c => c.scan_opportunities?.review_status !== 'pass' && ((cmap[c.opportunity_id]?.fit_score ?? -1) >= RELEVANT || KEEP_STATUSES.includes(c.scan_opportunities?.review_status) || vmap[c.opportunity_id] === 'worth_a_look')).slice(0, 10);
+  const ch = (ch0||[]).filter(c => c.scan_opportunities?.review_status !== 'pass' && (cmap[c.opportunity_id]?.fit_score ?? -1) >= RELEVANT).slice(0, 10);
   document.getElementById('changes-list').innerHTML = (ch||[]).length ? `<table>${ch.map(c => `<tr class="row" onclick="openDetail('${c.opportunity_id}')"><td><div class="t-title">${esc(c.scan_opportunities?.title || '')}</div><div class="sub">${esc(c.field)}: ${esc((c.old_value||'—').slice(0,40))} → ${esc((c.new_value||'—').slice(0,40))}</div></td><td class="sub" style="white-space:nowrap">${ago(c.detected_at)}</td></tr>`).join('')}</table>` : '<div class="empty">No changes to relevant opportunities yet.</div>';
   const [{ data: srcs }, { data: runs }] = await Promise.all([ db.from('scan_sources').select('*').order('id'), db.from('scan_runs').select('*').order('started_at', { ascending:false }).limit(30) ]);
   const latest = id => (runs||[]).find(r => r.source_id === id);
@@ -465,8 +459,8 @@ function jump(f){
   if (f.deadline) document.getElementById('f-deadline').value = f.deadline;
   if (f.review) document.getElementById('f-review').value = f.review;
   if (f.source) document.getElementById('f-source').value = f.source;
-  document.getElementById('f-fit').value = f.fit ? String(RELEVANT >= 60 ? 60 : RELEVANT >= 40 ? (RELEVANT >= 50 ? '' : 40) : '') : '';
-  if (f.fit) { document.getElementById('f-sort').value = 'fit'; ensureFitOption(RELEVANT); document.getElementById('f-fit').value = String(RELEVANT); }
+  ensureFitOption(RELEVANT); document.getElementById('f-fit').value = String(f.fit ? RELEVANT : FLOOR);
+  if (f.fit) document.getElementById('f-sort').value = 'fit';
   show('opps');
 }
 async function scanNow(){
@@ -485,7 +479,8 @@ async function scanNow(){
 async function loadOpps(){
   const v = id => document.getElementById(id).value;
   const area = v('f-area');
-  let q = db.from('scan_opportunities').select(LIST_COLS + (area ? ',scan_tags!inner(networks,governance,learning,resilience)' : ''), { count:'exact' });
+  const minFit = Math.max(FLOOR, Number(v('f-fit') || FLOOR));
+  let q = db.from('scan_opportunities').select(LIST_COLS + ',scan_assessments!inner(fit_score)' + (area ? ',scan_tags!inner(networks,governance,learning,resilience)' : ''), { count:'exact' }).gte('scan_assessments.fit_score', minFit);
   if (area) q = q.gte('scan_tags.' + area, 2);
   if (v('f-juris')) q = q.in('source_id', jurisSources(v('f-juris')));
   const prof = v('f-profile');
@@ -503,13 +498,12 @@ async function loadOpps(){
   const { data, count: n, error } = await q;
   if (error) { document.getElementById('opps-table').innerHTML = `<div class="empty">Could not load: ${esc(error.message)}</div>`; return; }
   const amap = await assessMap(data.map(o => o.id));
-  const minFit = Number(v('f-fit') || 0);
-  let rows = data.filter(o => !minFit || (amap[o.id]?.fit_score ?? -1) >= minFit);
+  let rows = data.filter(o => (amap[o.id]?.fit_score ?? -1) >= minFit);
   if (v('f-sort') === 'fit') rows.sort((a, b) => (amap[b.id]?.fit_score ?? -1) - (amap[a.id]?.fit_score ?? -1));
   document.getElementById('opp-count').textContent = `${n ?? 0} ${n === 1 ? 'record' : 'records'}${n > 500 ? ' (first 500 shown)' : ''}`;
-  if (minFit) document.getElementById('opp-count').textContent = `${rows.length} with fit ${minFit}+ (of ${n ?? 0})`;
+  document.getElementById('opp-count').textContent = `${rows.length} with fit ${minFit}+`;
   if (area) document.getElementById('opp-count').textContent += ' · ' + AREAS.find(a => a[0] === area)[1] + ' is substantial or central';
-  if (!rows.length) { document.getElementById('opps-table').innerHTML = '<div class="empty">No opportunities match these filters.</div>'; return; }
+  if (!rows.length) { document.getElementById('opps-table').innerHTML = '<div class="empty">No opportunities scoring ' + minFit + '+ match these filters. Lower-scoring items are stored; ask Claude to query them.</div>'; return; }
   document.getElementById('opps-table').innerHTML = `<table><tr><th>Fit</th><th>Opportunity</th><th>Source</th><th>Agency</th><th>Geography</th><th>Value</th><th>Deadline</th><th>Stage</th><th>Profiles</th></tr>${rows.map(o => `<tr class="row" onclick="openDetail('${o.id}')">
     <td style="width:70px">${fitBadge(amap[o.id])}</td>
     <td style="max-width:420px"><div class="t-title">${esc(o.title)}</div><div>${area ? areaPill(o, area) : ''} ${eligPill(o)} ${reviewPill(o.review_status)}</div></td>
