@@ -167,6 +167,14 @@
   .star.on { color:#d98a00; }
   .wl li { position:relative; padding-left:14px; } .wl li.upd::before { content:''; position:absolute; left:0; top:12px; width:7px; height:7px; border-radius:50%; background:var(--blue); }
   .chg { font-size:12px; color:var(--blue-dark); margin-top:2px; } .chg b { font-weight:650; }
+  .kq { border:1px solid var(--border); border-radius:10px; padding:12px 14px; margin:14px 0; background:#fcfcfb; }
+  .kq-item { border-top:1px solid var(--border); padding:10px 0; } .kq-item:first-of-type { border-top:none; }
+  .kq-q { font-weight:600; font-size:13.5px; } .kq-a { font-size:13px; margin-top:6px; background:#fff; border:1px solid var(--border); border-radius:8px; padding:10px 12px; }
+  .kq-a h3, .kq-a h4 { font-size:13px; margin:10px 0 3px; } .kq-a p { margin:4px 0; } .kq-a ul { margin:3px 0 3px 18px; padding:0; }
+  .kq-src { font-size:11.5px; color:var(--muted); margin-top:6px; } .kq-src a { color:var(--blue); }
+  .qpill { display:inline-block; font-size:11px; padding:1px 7px; border-radius:10px; background:#f1f0ec; color:#555; margin-left:6px; font-weight:600; }
+  .qpill.investigating { background:var(--amber-light); color:var(--amber-dark); } .qpill.answered { background:var(--green-light); color:#085041; } .qpill.failed { background:var(--red-light); color:var(--red); }
+  .kq-add { display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; } .kq-add textarea { flex-basis:100%; min-height:52px; font-size:13px; }
   .toast { position:fixed; bottom:22px; left:50%; transform:translateX(-50%); background:#1f2328; color:#fff; padding:10px 18px; border-radius:8px; font-size:13px; display:none; z-index:40; }
   .toast.on { display:block; }
 </style>
@@ -226,6 +234,7 @@
         <div id="topfit-list"></div></div>
       <div>
         <div class="panel" id="watch-panel"><h2 style="display:flex;align-items:center;gap:8px">Watching <span class="sub" style="font-weight:400" id="watch-sub"></span><button class="linkbtn" id="watch-seen-all" style="margin-left:auto" onclick="markSeen(null)" hidden>Mark all seen</button></h2><div id="watch-list"></div></div>
+        <div class="panel"><h2>Key questions <span class="sub" style="font-weight:400" id="kq-sub"></span></h2><div id="kq-list"></div></div>
         <div class="panel"><h2>Upcoming deadlines <span class="sub" style="font-weight:400">· fit <span class="minfit-label">60</span>+, a week or more out</span></h2><div id="closing-list"></div></div>
         <div class="panel"><h2>Recent changes <span class="sub" style="font-weight:400">· fit <span class="minfit-label">60</span>+</span></h2><div id="changes-list"></div></div>
       </div>
@@ -471,6 +480,68 @@ async function markSeen(id, quiet){
 }
 function goWatching(){ show('dash'); setTimeout(() => document.getElementById('watch-panel')?.scrollIntoView({ behavior:'smooth', block:'start' }), 300); }
 
+// ── key questions: Evan's questions about an opportunity, investigated by Claude on request ──
+const QTYPES = [['positioning','Positioning / competitiveness'],['expertise_gap','Expertise gap'],['eligibility','Eligibility / structure'],['funder_intent','What the funder wants'],['partners','Partners needed'],['capacity','Capacity'],['other','Other']];
+let KQ_POLL = null;
+function mdHtml(t){
+  const lines = String(t || '').split('\n'); let html = '', inList = false;
+  const inline = x => esc(x).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/\*(.+?)\*/g, '<i>$1</i>').replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+  for (const raw of lines) { const l = raw.trimEnd();
+    if (/^\s*[-*] /.test(l)) { if (!inList) { html += '<ul>'; inList = true; } html += '<li>' + inline(l.replace(/^\s*[-*] /, '')) + '</li>'; continue; }
+    if (inList) { html += '</ul>'; inList = false; }
+    if (/^#{1,4} /.test(l)) html += '<h4>' + inline(l.replace(/^#{1,4} /, '')) + '</h4>'; else if (l.trim()) html += '<p>' + inline(l) + '</p>'; }
+  return html + (inList ? '</ul>' : '');
+}
+function kqItem(q){
+  const used = q.context_used || {};
+  const usedLine = q.status === 'answered' ? [used.full_notice ? 'full funding notice' : 'notice summary only', used.past_awards ? `${used.past_awards} past awards` : null, used.web_search ? 'web search' : null].filter(Boolean).join(' · ') : '';
+  return `<div class="kq-item" id="kq-${q.id}">
+    <div class="kq-q">${esc(q.question)}<span class="qpill">${esc((QTYPES.find(t => t[0] === q.qtype) || [, 'General'])[1])}</span><span class="qpill ${q.status}">${q.status === 'investigating' ? 'Investigating… (about a minute)' : q.status}</span></div>
+    ${q.status === 'answered' ? `<div class="kq-a">${mdHtml(q.answer)}</div><div class="kq-src">Based on: ${esc(usedLine)} · ${fdate(q.answered_at)}${(q.sources||[]).length ? '<br>Sources: ' + q.sources.map(s => `<a href="${esc(s.url)}" target="_blank" rel="noopener">${esc((s.title || s.url).slice(0, 70))}</a>`).join(' · ') : ''}</div>` : ''}
+    ${q.status === 'failed' ? `<div class="sub" style="color:var(--red)">Investigation failed: ${esc(q.error || '')}</div>` : ''}
+    <div style="display:flex;gap:10px;margin-top:6px">
+      ${q.status !== 'investigating' ? `<button class="linkbtn" onclick="investigateQ('${q.id}')">${q.status === 'answered' ? 'Re-investigate' : 'Investigate with Claude'}</button>` : ''}
+      ${q.status !== 'closed' && q.status !== 'investigating' ? `<button class="linkbtn" style="color:var(--muted)" onclick="closeQ('${q.id}')">Mark resolved</button>` : ''}
+      <button class="linkbtn" style="color:var(--muted)" onclick="deleteQ('${q.id}')">Delete</button></div>
+  </div>`;
+}
+async function renderKQ(oid){
+  const el = document.getElementById('kq-box'); if (!el) return;
+  const { data } = await db.from('scan_questions').select('*').eq('opportunity_id', oid).order('created_at');
+  const qs = data || [];
+  el.innerHTML = `<b style="font-size:13px">Key questions</b> <span class="sub">· what would you need to know to decide? Claude can research it.</span>
+    ${qs.map(kqItem).join('')}
+    <div class="kq-add"><textarea id="kq-text" placeholder="e.g. What would it take for us to be competitive without opioid-specific expertise?"></textarea>
+      <select id="kq-type">${QTYPES.map(([v,l]) => `<option value="${v}">${l}</option>`).join('')}</select>
+      <button class="btn ghost small" onclick="addQ('${oid}', false)">Save question</button>
+      <button class="btn small" onclick="addQ('${oid}', true)">Save & investigate</button></div>`;
+  clearTimeout(KQ_POLL);
+  if (qs.some(q => q.status === 'investigating')) KQ_POLL = setTimeout(() => { if (current?.id === oid) renderKQ(oid); }, 6000);
+}
+async function addQ(oid, go){
+  const text = document.getElementById('kq-text').value.trim(); if (!text) return toast('Type a question first.');
+  const { data, error } = await db.from('scan_questions').insert({ opportunity_id: oid, question: text, qtype: document.getElementById('kq-type').value }).select().single();
+  if (error) return toast('Could not save: ' + error.message);
+  if (go) await investigateQ(data.id, true); else { toast('Question saved'); renderKQ(oid); }
+}
+async function investigateQ(id, quiet){
+  try { const r = await fetch(SUPABASE_URL + '/functions/v1/scan-investigate', { method:'POST', headers: { 'Content-Type':'application/json', 'apikey': SUPABASE_KEY }, body: JSON.stringify({ question_id: id }) });
+    const j = await r.json(); if (!j.ok) return toast('Could not start: ' + (j.error || 'unknown error'), 5000); }
+  catch (e) { return toast('Could not start: ' + e.message, 5000); }
+  toast('Investigating. The answer appears here in about a minute; you can keep working.', 5000);
+  if (current) renderKQ(current.id);
+}
+async function closeQ(id){ await db.from('scan_questions').update({ status:'closed' }).eq('id', id); if (current) renderKQ(current.id); loadKQPanel(); }
+async function deleteQ(id){ if (!confirm('Delete this question and its answer?')) return; await db.from('scan_questions').delete().eq('id', id); if (current) renderKQ(current.id); loadKQPanel(); }
+async function loadKQPanel(){
+  const el = document.getElementById('kq-list'); if (!el) return;
+  const { data } = await db.from('scan_questions').select('id,question,status,answered_at,created_at,opportunity_id,scan_opportunities(title)').neq('status', 'closed').order('created_at', { ascending:false }).limit(8);
+  const qs = data || [];
+  document.getElementById('kq-sub').textContent = qs.length ? `· ${qs.filter(q => q.status === 'answered').length} answered, ${qs.filter(q => q.status !== 'answered').length} open` : '';
+  el.innerHTML = qs.length ? `<ul class="mini">${qs.map(q => `<li onclick="openDetail('${q.opportunity_id}')"><div class="ttl">${esc(q.question)}</div><div class="meta">${ax(q.scan_opportunities?.title || '')}</div><div><span class="qpill ${q.status}" style="margin-left:0">${q.status === 'investigating' ? 'investigating…' : q.status}</span></div></li>`).join('')}</ul>`
+    : '<div class="sub">Open an opportunity and add a key question, e.g. "what would it take for us to be competitive?" Claude can research it with the full notice, past winners and the web.</div>';
+}
+
 // ── dashboard visuals ──
 const AREA_COLORS = { networks:'#2a78d6', governance:'#7b5cc4', learning:'#1D9E75', resilience:'#d98a00', other:'#a8a7a2' };
 function mainArea(o){ const t = Array.isArray(o.scan_tags) ? o.scan_tags[0] : o.scan_tags; if (!t) return 'other'; let best = 'other', v = 1; for (const [k] of AREAS) if ((t[k] ?? 0) > v) { v = t[k]; best = k; } return best; }
@@ -696,7 +767,7 @@ async function loadDash(){
   RELEVANT = Math.max(FLOOR, mf && !isNaN(Number(mf.value)) ? Number(mf.value) : FLOOR);
   const sel = document.getElementById('min-fit'); if (sel) sel.value = String(RELEVANT);
   document.querySelectorAll('.minfit-label').forEach(e => e.textContent = RELEVANT);
-  loadDials(); loadCalibration(); loadWatchPanel();
+  loadDials(); loadCalibration(); loadWatchPanel(); loadKQPanel();
   const { data: vlist } = await db.from('scan_verdicts').select('*');
   const fbmap = Object.fromEntries((vlist||[]).map(x => [x.opportunity_id, x]));
   const now = new Date(), iso = d => new Date(now.getTime() + d*864e5).toISOString();
@@ -838,6 +909,7 @@ async function openDetail(id){
       ${o.pipeline_opportunity_id ? `<span class="pill p-ok" style="align-self:center">In BD pipeline (#${o.pipeline_opportunity_id})</span>` : `<button class="btn small" onclick="openPipe()">Send to pipeline</button>`}
     </div>
     ${asmt && asmt.fit_score != null ? `<div class="assess" style="padding:10px 14px"><b style="font-size:13px">Your feedback</b> <span class="sub">· trains the scoring</span>${fbForm(o.id, asmt.fit_score, vd)}</div>` : ''}
+    <div class="kq" id="kq-box"><span class="sub">Loading questions…</span></div>
     ${assessBlock(asmt, vd, o.id)}
     <div class="kv">
       <div>Agency</div><div>${agency(o)}</div>
@@ -861,6 +933,7 @@ async function openDetail(id){
     <h3 style="font-size:14px;margin:18px 0 6px">Change history</h3>
     ${(ch||[]).length ? `<table>${ch.map(c => `<tr><td class="sub" style="white-space:nowrap">${fdate(c.detected_at)}</td><td><b>${esc(c.field)}</b>: ${esc(c.old_value ?? '—')} → ${esc(c.new_value ?? '—')}</td></tr>`).join('')}</table>` : '<div class="sub">No changes since first seen.</div>'}
     <details style="margin-top:18px"><summary class="sub">Original source record</summary><pre style="font-size:11px;white-space:pre-wrap;background:#fafaf8;padding:10px;border-radius:8px">${esc(JSON.stringify(o.raw, null, 2))}</pre></details>`;
+  renderKQ(o.id);
   if (usePane) target.scrollTop = 0; else { document.getElementById('shade').classList.add('on'); document.getElementById('drawer').classList.add('on'); }
 }
 function assessBlock(a, vd, oid){
