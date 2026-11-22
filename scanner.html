@@ -148,6 +148,16 @@
   .li .fitcol { width:42px; flex-shrink:0; text-align:center; } .li .fitcol .sub { font-size:10.5px; }
   .li .body { min-width:0; flex:1; display:flex; flex-direction:column; gap:2px; }
   @media (max-width:1000px){ .split { grid-template-columns:1fr; height:auto; } .split .pane { display:none; } }
+  abbr[title] { text-decoration:underline dotted; text-underline-offset:2px; cursor:help; }
+  .viz-grid { display:grid; grid-template-columns:minmax(0,2fr) minmax(260px,1fr); gap:16px; align-items:start; }
+  @media (max-width:1000px){ .viz-grid { grid-template-columns:1fr; } }
+  .runway circle { cursor:pointer; } .runway circle:hover { stroke:#1f2328; stroke-width:2; }
+  .legend { display:flex; gap:12px; flex-wrap:wrap; font-size:11.5px; color:var(--muted); margin-top:4px; } .legend i { display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:4px; vertical-align:-1px; }
+  .fbar { display:grid; grid-template-columns:96px 1fr 26px; gap:8px; align-items:center; font-size:12.5px; padding:3px 0; cursor:pointer; }
+  .fbar:hover .lab { color:var(--blue); } .fbar .track { height:12px; background:#f1f0ec; border-radius:6px; overflow:hidden; } .fbar .track i { display:block; height:100%; background:var(--blue); border-radius:6px; }
+  .fbar .lab { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-weight:600; }
+  .fchip { display:inline-flex; align-items:center; gap:4px; background:var(--blue-light); color:var(--blue-dark); border-radius:12px; padding:2px 8px; font-size:12px; font-weight:600; margin-left:6px; }
+  .fchip button { border:none; background:none; cursor:pointer; color:var(--blue-dark); font-size:14px; line-height:1; padding:0; }
   .toast { position:fixed; bottom:22px; left:50%; transform:translateX(-50%); background:#1f2328; color:#fff; padding:10px 18px; border-radius:8px; font-size:13px; display:none; z-index:40; }
   .toast.on { display:block; }
 </style>
@@ -193,6 +203,10 @@
     <div class="panel"><h2>Where federal funding is leaning <span class="sub" style="font-weight:400">· share of new solicitations substantially involving each area, by two-month period · click a dial for its opportunities</span></h2>
       <div class="dials compact" id="dials"></div>
       <div class="note" id="dials-note"></div></div>
+    <div class="viz-grid">
+      <div class="panel"><h2>Deadline runway <span class="sub" style="font-weight:400">· fit <span class="minfit-label">60</span>+ opportunities by due date, next 3 months · hover for details, click to open</span></h2><div id="runway"></div></div>
+      <div class="panel"><h2>Where the fits come from <span class="sub" style="font-weight:400">· open fit <span class="minfit-label">60</span>+ by funder · click to list</span></h2><div id="funders"></div></div>
+    </div>
     <div class="cards" id="stat-cards"></div>
     <div class="dash-grid">
       <div class="panel"><h2 style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">Best fit <span class="sub" style="font-weight:400">· open, scored by Claude</span>
@@ -296,7 +310,7 @@ function syncSourceOptions(){
   sel.value = list.some(r => r.id === cur) ? cur : '';
 }
 const jurisSources = j => SRC_META.filter(r => (r.jurisdiction || 'other') === j).map(r => r.id);
-const LIST_COLS = 'id,source_id,title,agency_name,top_level_agency,bureau,country_codes,states,geography_text,opportunity_type,stage,deadline,deadline_tz,deadline_rolling,deadline_text,award_ceiling,total_program_funding,value_unknown,eligibility_flag,set_aside,match_profiles,review_status,award_end_date,recipient_name,is_stale,first_seen_at,last_changed_at';
+const LIST_COLS = 'id,source_id,title,agency_code,agency_name,top_level_agency,bureau,country_codes,states,geography_text,opportunity_type,stage,deadline,deadline_tz,deadline_rolling,deadline_text,award_ceiling,total_program_funding,value_unknown,eligibility_flag,set_aside,match_profiles,review_status,award_end_date,recipient_name,is_stale,first_seen_at,last_changed_at';
 let profiles = [], session = null, current = null;
 
 // ── helpers ──
@@ -314,7 +328,7 @@ function deadline(o){
   return '<span class="sub">' + esc(o.deadline_text || '—') + '</span>';
 }
 function geo(o){ const g = [...(o.country_codes||[]), ...(o.states||[])].join(', '); return esc(g || o.geography_text || ''); }
-function agency(o){ const top = o.source_id === 'sam' ? titleCase(o.top_level_agency) : (o.top_level_agency || ''); const sub = o.bureau || o.agency_name || ''; return esc(top) + (sub && sub !== top ? '<div class="sub">' + esc(o.source_id==='sam' ? titleCase(sub) : sub) + '</div>' : ''); }
+function agency(o){ const top = o.source_id === 'sam' ? titleCase(o.top_level_agency) : (o.top_level_agency || ''); const sub = o.bureau || o.agency_name || ''; return ax(top) + (sub && sub !== top ? '<div class="sub">' + ax(o.source_id==='sam' ? titleCase(sub) : sub) + '</div>' : ''); }
 function agencyShort(o){ const top = o.source_id === 'sam' ? titleCase(o.top_level_agency) : (o.top_level_agency || ''); const sub = o.bureau || o.agency_name || ''; return sub && sub !== top && top ? (o.source_id === 'sam' ? titleCase(sub) : sub) + ' · ' + top : (top || sub); }
 function dueText(o){
   if (o.source_id === 'usaspending') return o.award_end_date ? 'Ends ' + fdate(o.award_end_date) : '—';
@@ -327,12 +341,79 @@ function dueText(o){
 function oppCard(o, a, vd){
   const val = o.award_ceiling ?? o.total_program_funding;
   return `<div class="oc" onclick="openDetail('${o.id}')">
-    <div class="top"><span class="fit ${a.fit_score >= 60 ? 'fit-hi' : 'fit-mid'}">${a.fit_score}</span><div class="ttl">${esc(o.title)}</div></div>
-    <div class="meta" title="${esc(agencyShort(o))}">${esc(agencyShort(o))} · ${esc(SOURCES[o.source_id] || o.source_id)}</div>
+    <div class="top"><span class="fit ${a.fit_score >= 60 ? 'fit-hi' : 'fit-mid'}">${a.fit_score}</span><div class="ttl">${ax(o.title)}</div></div>
+    <div class="meta">${ax(agencyShort(o))} · ${esc(SOURCES[o.source_id] || o.source_id)}</div>
     <div class="meta">${esc(a.recommended_role || '')}${val ? ' · ' + money(Number(val)) : ''} · ${dueText(o)}</div>
     <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">${eligPill(o)} ${fbSummary(vd)}<button class="linkbtn" style="margin-left:auto" onclick="toggleFb('${o.id}', event)">${vd ? 'Edit feedback' : 'Give feedback'}</button></div>
     <div id="fbw-${o.id}" hidden>${fbForm(o.id, a.fit_score, vd)}</div>
   </div>`;
+}
+// ── acronyms: hover shows the full name ──
+const ACRONYMS = {
+  EDA:'Economic Development Administration (U.S. Department of Commerce)', HRSA:'Health Resources and Services Administration (HHS)',
+  HUD:'U.S. Department of Housing and Urban Development', HHS:'U.S. Department of Health and Human Services', CDC:'Centers for Disease Control and Prevention (HHS)',
+  FEMA:'Federal Emergency Management Agency (DHS)', DHS:'U.S. Department of Homeland Security', DOC:'U.S. Department of Commerce', DOS:'U.S. Department of State',
+  DRL:'Bureau of Democracy, Human Rights, and Labor (State Department)', USAID:'U.S. Agency for International Development', USDA:'U.S. Department of Agriculture',
+  DOJ:'U.S. Department of Justice', OJP:'Office of Justice Programs (DOJ)', ACF:'Administration for Children and Families (HHS)', ACL:'Administration for Community Living (HHS)',
+  SAMHSA:'Substance Abuse and Mental Health Services Administration (HHS)', ASPR:'Administration for Strategic Preparedness and Response (HHS)', NIH:'National Institutes of Health (HHS)',
+  NSF:'National Science Foundation', NEH:'National Endowment for the Humanities', IHS:'Indian Health Service (HHS)', DOL:'U.S. Department of Labor', ETA:'Employment and Training Administration (DOL)',
+  MCC:'Millennium Challenge Corporation', DoD:'U.S. Department of Defense', DOE:'U.S. Department of Energy', USACE:'U.S. Army Corps of Engineers', RNTA:'Research and National Technical Assistance (EDA program)',
+  RWHAP:'Ryan White HIV/AIDS Program (HRSA)', RCORP:'Rural Communities Opioid Response Program (HRSA)', DCTA:'Distressed Cities Technical Assistance (HUD)',
+  ROSS:'Resident Opportunity and Self-Sufficiency (HUD)', MEL:'Monitoring, evaluation and learning', NOFO:'Notice of Funding Opportunity', RFI:'Request for Information',
+  RFP:'Request for Proposals', RFA:'Request for Applications', BPA:'Blanket Purchase Agreement', SBA:'U.S. Small Business Administration', NAICS:'North American Industry Classification System code',
+  CBO:'Community-based organization', STI:'Sexually transmitted infection', OES:"Governor's Office of Emergency Services (California)", FY:'Fiscal year', FFY:'Federal fiscal year',
+  NCETR:'National Center for Explosives Training and Research (DOJ)', TB:'Tuberculosis', PAS:'Public Affairs Section (U.S. embassy)', RCV:'Root Change Ventures, Inc.',
+};
+const ACR_RE = new RegExp('\\b(' + Object.keys(ACRONYMS).sort((a,b) => b.length - a.length).join('|') + ')\\b', 'g');
+const abbrify = html => String(html).replace(ACR_RE, m => `<abbr title="${esc(ACRONYMS[m])}">${m}</abbr>`);
+const ax = t => abbrify(esc(t));
+
+// ── funder grouping for "where the fits come from" ──
+function funderKey(o){
+  const code = String(o.agency_code || ''), top = String(o.top_level_agency || '').toUpperCase(), name = o.agency_name || '';
+  if (o.source_id === 'cagrants') return 'California';
+  if (o.source_id === 'sam') {
+    if (/DEFENSE/.test(top)) return /ENGINEER/i.test(name + ' ' + (o.bureau||'')) ? 'USACE' : 'DoD';
+    const m = [['HOMELAND','DHS'],['STATE, DEP','State'],['HEALTH AND HUMAN','HHS'],['AGRICULTURE','USDA'],['JUSTICE','DOJ'],['ENERGY','DOE'],['COMMERCE','DOC'],['LABOR','DOL'],['HOUSING','HUD']].find(([k]) => top.includes(k));
+    return m ? m[1] : titleCase(o.top_level_agency || 'Other');
+  }
+  if (code.startsWith('HHS-')) { const k = code.split('-')[1]; return { SAMHS:'SAMHSA' }[k] || k; }
+  if (code.startsWith('DOC')) return code.includes('EDA') || /\bEDA\b/.test(o.title || '') || /Economic Development/i.test(name) ? 'EDA' : 'DOC';
+  if (code.startsWith('DOS')) return 'State';
+  if (code.startsWith('USDOJ')) return 'DOJ';
+  const pre = code.split('-')[0];
+  return { AC:'AmeriCorps', USDA:'USDA', DHS:'DHS', DOL:'DOL', HUD:'HUD', NSF:'NSF', NEH:'NEH', MCC:'MCC', DOE:'DOE' }[pre] || (o.top_level_agency || pre || 'Other');
+}
+const funderFull = k => ACRONYMS[k] || (k === 'State' ? 'U.S. Department of State' : k === 'California' ? 'State of California agencies (California Grants Portal)' : k);
+let FUNDER_FILTER = null;
+
+// ── dashboard visuals ──
+const AREA_COLORS = { networks:'#2a78d6', governance:'#7b5cc4', learning:'#1D9E75', resilience:'#d98a00', other:'#a8a7a2' };
+function mainArea(o){ const t = Array.isArray(o.scan_tags) ? o.scan_tags[0] : o.scan_tags; if (!t) return 'other'; let best = 'other', v = 1; for (const [k] of AREAS) if ((t[k] ?? 0) > v) { v = t[k]; best = k; } return best; }
+function renderRunway(items){
+  const el = document.getElementById('runway'); if (!el) return;
+  const DAYS = 91, W = 760, H = 98, L = 16, R = 16, axisY = 72;
+  const t0 = new Date(); t0.setHours(0,0,0,0); const t1 = t0.getTime() + DAYS * 864e5;
+  const x = t => L + (t - t0.getTime()) / (t1 - t0.getTime()) * (W - L - R);
+  const dated = items.filter(i => i.o.deadline && Date.parse(i.o.deadline) >= t0.getTime() && Date.parse(i.o.deadline) <= t1).sort((a,b) => Date.parse(a.o.deadline) - Date.parse(b.o.deadline));
+  const later = items.filter(i => i.o.deadline && Date.parse(i.o.deadline) > t1).length;
+  const rolling = items.filter(i => !i.o.deadline || i.o.deadline_rolling).length;
+  const lanes = {}; let ticks = '';
+  for (let d = 0; d <= DAYS; d += 7) { const tx = x(t0.getTime() + d*864e5); ticks += `<line x1="${tx}" y1="${axisY}" x2="${tx}" y2="${axisY+4}" stroke="#c9c8c3"/>`; }
+  for (let m = 0; m < 4; m++) { const md = new Date(t0.getFullYear(), t0.getMonth() + m + (m === 0 ? 0 : 0), 1); if (m === 0) continue; const mx = x(md.getTime()); if (mx > W - R) break; ticks += `<line x1="${mx}" y1="4" x2="${mx}" y2="${axisY}" stroke="#ecebe7" stroke-dasharray="3 3"/><text x="${mx+3}" y="${axisY+16}" font-size="11" fill="#6b6b68">${md.toLocaleDateString('en-US',{month:'short'})}</text>`; }
+  const dots = dated.map(i => { const t = Date.parse(i.o.deadline); const wk = Math.floor((t - t0.getTime()) / (7*864e5)); const lane = lanes[wk] = (lanes[wk] ?? -1) + 1; const r = 5 + Math.max(0, (i.fit - 60)) / 6; const cy = axisY - 12 - lane * (r*2 + 3);
+    return `<circle cx="${x(t)}" cy="${Math.max(6, cy)}" r="${r}" fill="${AREA_COLORS[mainArea(i.o)]}" fill-opacity=".85" onclick="openDetail('${i.o.id}')"><title>${esc(i.o.title)}\nFit ${i.fit} · due ${fdate(i.o.deadline)}\n${esc(agencyShort(i.o))}</title></circle>`; }).join('');
+  el.innerHTML = `<svg class="runway" viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Deadlines of fit opportunities over the next three months">
+    <line x1="${L}" y1="${axisY}" x2="${W-R}" y2="${axisY}" stroke="#c9c8c3"/>${ticks}
+    <text x="${L}" y="${axisY+16}" font-size="11" fill="#6b6b68">Today</text>${dots}</svg>
+    <div class="legend">${AREAS.map(([k,l]) => `<span><i style="background:${AREA_COLORS[k]}"></i>${esc(l)}</span>`).join('')}<span><i style="background:${AREA_COLORS.other}"></i>Other</span>
+    <span style="margin-left:auto">${dated.length ? '' : 'No dated deadlines in the next 3 months. '}Bigger dot = higher fit${rolling ? ` · ${rolling} rolling / no fixed date` : ''}${later ? ` · ${later} due later` : ''}</span></div>`;
+}
+function renderFunders(items){
+  const el = document.getElementById('funders'); if (!el) return;
+  const counts = {}; items.forEach(i => { const k = funderKey(i.o); counts[k] = (counts[k] || 0) + 1; });
+  const rows = Object.entries(counts).sort((a,b) => b[1] - a[1]).slice(0, 9); const max = Math.max(1, ...rows.map(r => r[1]));
+  el.innerHTML = rows.length ? rows.map(([k, n]) => `<div class="fbar" onclick="jump({funder:'${esc(k)}'})" title="${esc(funderFull(k))}"><span class="lab">${ACRONYMS[k] ? `<abbr title="${esc(ACRONYMS[k])}">${esc(k)}</abbr>` : esc(k)}</span><span class="track"><i style="width:${n/max*100}%"></i></span><span>${n}</span></div>`).join('') : '<div class="empty">No open fit opportunities yet.</div>';
 }
 const stagePill = s => s ? `<span class="pill p-${esc(s)}">${esc(s)}</span>` : '';
 const areaPill = (o, k) => { const t = Array.isArray(o.scan_tags) ? o.scan_tags[0] : o.scan_tags; const v = t ? t[k] : 0; return v >= 2 ? `<span class="apill">${v >= 3 ? 'Central' : 'Substantial'}: ${esc(AREAS.find(a => a[0] === k)[1])}</span>` : ''; };
@@ -533,7 +614,9 @@ async function loadDash(){
   const { data: vlist } = await db.from('scan_verdicts').select('*');
   const fbmap = Object.fromEntries((vlist||[]).map(x => [x.opportunity_id, x]));
   const now = new Date(), iso = d => new Date(now.getTime() + d*864e5).toISOString();
-  const { data: fitRows } = await db.from('scan_assessments').select('opportunity_id,fit_score,scan_opportunities!inner(stage,is_stale,review_status,first_seen_at,deadline)').gte('fit_score', RELEVANT).in('scan_opportunities.stage',['active','upcoming']).eq('scan_opportunities.is_stale', false).neq('scan_opportunities.review_status','pass');
+  const { data: fitRows } = await db.from('scan_assessments').select('opportunity_id,fit_score,scan_opportunities!inner(id,title,source_id,agency_code,agency_name,top_level_agency,bureau,stage,is_stale,review_status,first_seen_at,deadline,deadline_rolling,scan_tags(networks,governance,learning,resilience))').gte('fit_score', RELEVANT).in('scan_opportunities.stage',['active','upcoming']).eq('scan_opportunities.is_stale', false).neq('scan_opportunities.review_status','pass');
+  const fitItems = (fitRows||[]).filter(r => fbmap[r.opportunity_id]?.decision !== 'pass').map(r => ({ o: r.scan_opportunities, fit: r.fit_score }));
+  renderRunway(fitItems); renderFunders(fitItems);
   const fr = (fitRows||[]).map(r => r.scan_opportunities);
   const nFit = fr.length;
   const nNew = fr.filter(o => o.first_seen_at >= iso(-7)).length;
@@ -551,11 +634,11 @@ async function loadDash(){
   const { data: soon0 } = await matchedOpen(db.from('scan_opportunities').select(LIST_COLS)).gte('deadline', iso(7)).order('deadline').limit(80);
   const smap = await assessMap((soon0||[]).map(o => o.id));
   const soon = (soon0||[]).filter(o => (smap[o.id]?.fit_score ?? -1) >= RELEVANT && fbmap[o.id]?.decision !== 'pass').slice(0, 6);
-  document.getElementById('closing-list').innerHTML = soon.length ? `<ul class="mini">${soon.map(o => `<li onclick="openDetail('${o.id}')"><div class="ttl">${esc(o.title)}</div><div class="meta">${dueText(o)} · fit ${smap[o.id]?.fit_score ?? '—'} · ${esc(agencyShort(o))}</div></li>`).join('')}</ul>` : '<div class="empty">No fit ' + RELEVANT + '+ deadlines in the coming weeks.</div>';
+  document.getElementById('closing-list').innerHTML = soon.length ? `<ul class="mini">${soon.map(o => `<li onclick="openDetail('${o.id}')"><div class="ttl">${ax(o.title)}</div><div class="meta">${dueText(o)} · fit ${smap[o.id]?.fit_score ?? '—'} · ${ax(agencyShort(o))}</div></li>`).join('')}</ul>` : '<div class="empty">No fit ' + RELEVANT + '+ deadlines in the coming weeks.</div>';
   const { data: ch0 } = await db.from('scan_changes').select('field,old_value,new_value,detected_at,opportunity_id,scan_opportunities(title,review_status)').order('detected_at', { ascending:false }).limit(150);
   const cmap = await assessMap([...new Set((ch0||[]).map(c => c.opportunity_id))]);
   const ch = (ch0||[]).filter(c => c.scan_opportunities?.review_status !== 'pass' && (cmap[c.opportunity_id]?.fit_score ?? -1) >= RELEVANT).slice(0, 6);
-  document.getElementById('changes-list').innerHTML = ch.length ? `<ul class="mini">${ch.map(c => `<li onclick="openDetail('${c.opportunity_id}')"><div class="ttl">${esc(c.scan_opportunities?.title || '')}</div><div class="meta">${esc(c.field.replace(/_/g,' '))}: ${esc((c.old_value||'—').slice(0,24))} → ${esc((c.new_value||'—').slice(0,24))} · ${ago(c.detected_at)}</div></li>`).join('')}</ul>` : '<div class="empty">No changes to relevant opportunities yet.</div>';
+  document.getElementById('changes-list').innerHTML = ch.length ? `<ul class="mini">${ch.map(c => `<li onclick="openDetail('${c.opportunity_id}')"><div class="ttl">${ax(c.scan_opportunities?.title || '')}</div><div class="meta">${esc(c.field.replace(/_/g,' '))}: ${esc((c.old_value||'—').slice(0,24))} → ${esc((c.new_value||'—').slice(0,24))} · ${ago(c.detected_at)}</div></li>`).join('')}</ul>` : '<div class="empty">No changes to relevant opportunities yet.</div>';
   const [{ data: srcs }, { data: runs }] = await Promise.all([ db.from('scan_sources').select('*').order('id'), db.from('scan_runs').select('*').order('started_at', { ascending:false }).limit(30) ]);
   const latest = id => (runs||[]).find(r => r.source_id === id);
   document.getElementById('sources-table').innerHTML = `<table><tr><th>Source</th><th>Last run</th><th>Result</th><th>Found / new / changed</th><th>Last success</th><th>API calls today</th></tr>${(srcs||[]).map(s => { const r = latest(s.id); const st = r ? r.status : 'never'; const cls = st==='success'?'p-ok':st==='partial'?'p-partial':st==='running'?'p-check':'p-fail'; return `<tr><td><b>${esc(s.name)}</b>${s.enabled?'':' <span class="sub">(off)</span>'}</td><td>${ago(s.last_run_at)}</td><td><span class="pill ${cls}">${esc(st)}</span>${r&&r.error?`<div class="sub" style="max-width:340px">${esc(r.error)}</div>`:''}</td><td>${r?`${r.records_found} / ${r.records_new} / ${r.records_changed}`:'—'}</td><td>${ago(s.last_success_at)}</td><td>${s.daily_call_budget ? `${s.calls_date === new Date().toISOString().slice(0,10) ? s.calls_today : 0} of ${s.daily_call_budget}` : '<span class="sub">no limit</span>'}</td></tr>`; }).join('')}</table>`;
@@ -564,6 +647,7 @@ async function loadDash(){
 }
 function jump(f){
   ['f-q','f-profile','f-juris','f-area','f-deadline','f-elig'].forEach(id => document.getElementById(id).value = '');
+  FUNDER_FILTER = f.funder || null; if (f.funder) document.getElementById('f-sort').value = 'fit';
   syncSourceOptions(); document.getElementById('f-source').value = '';
   if (f.juris) { document.getElementById('f-juris').value = f.juris; syncSourceOptions(); }
   if (f.area) { document.getElementById('f-area').value = f.area; document.getElementById('f-profile').value = '__all'; document.getElementById('f-sort').value = 'fit'; }
@@ -611,17 +695,18 @@ async function loadOpps(){
   const { data, count: n, error } = await q;
   if (error) { document.getElementById('opps-table').innerHTML = `<div class="empty">Could not load: ${esc(error.message)}</div>`; return; }
   const amap = await assessMap(data.map(o => o.id));
-  let rows = data.filter(o => (amap[o.id]?.fit_score ?? -1) >= minFit);
+  let rows = data.filter(o => (amap[o.id]?.fit_score ?? -1) >= minFit && (!FUNDER_FILTER || funderKey(o) === FUNDER_FILTER));
   if (v('f-sort') === 'fit') rows.sort((a, b) => (amap[b.id]?.fit_score ?? -1) - (amap[a.id]?.fit_score ?? -1));
   document.getElementById('opp-count').textContent = `${n ?? 0} ${n === 1 ? 'record' : 'records'}${n > 500 ? ' (first 500 shown)' : ''}`;
   document.getElementById('opp-count').textContent = `${rows.length} with fit ${minFit}+`;
   if (area) document.getElementById('opp-count').textContent += ' · ' + AREAS.find(a => a[0] === area)[1] + ' is substantial or central';
+  if (FUNDER_FILTER) document.getElementById('opp-count').insertAdjacentHTML('beforeend', `<span class="fchip" title="${esc(funderFull(FUNDER_FILTER))}">Funder: ${esc(FUNDER_FILTER)} <button onclick="FUNDER_FILTER=null;loadOpps()" title="Clear">×</button></span>`);
   if (!rows.length) { document.getElementById('opps-table').innerHTML = '<div class="empty">No opportunities scoring ' + minFit + '+ match these filters. Lower-scoring items are stored; ask Claude to query them.</div>'; return; }
   const fbm = await loadFbMap(rows.map(o => o.id));
   document.getElementById('opps-table').innerHTML = rows.map(o => { const a = amap[o.id] || {}; const val = o.award_ceiling ?? o.total_program_funding; return `<div class="li ${current?.id === o.id ? 'sel' : ''}" id="li-${o.id}" onclick="openDetail('${o.id}')">
     <div class="fitcol"><span class="fit ${a.fit_score >= 60 ? 'fit-hi' : 'fit-mid'}">${a.fit_score ?? '—'}</span><div class="sub">${esc(a.recommended_role || '')}</div></div>
-    <div class="body"><div class="ttl">${esc(o.title)}</div>
-      <div class="meta" title="${esc(agencyShort(o))}">${esc(agencyShort(o))} · ${esc(SOURCES[o.source_id] || o.source_id)}</div>
+    <div class="body"><div class="ttl">${ax(o.title)}</div>
+      <div class="meta">${ax(agencyShort(o))} · ${esc(SOURCES[o.source_id] || o.source_id)}</div>
       <div class="meta">${dueText(o)}${val ? ' · ' + money(Number(val)) : ''}${geo(o) ? ' · ' + geo(o) : ''}</div>
       <div style="display:flex;gap:5px;flex-wrap:wrap">${area ? areaPill(o, area) : ''} ${eligPill(o)} ${fbSummary(fbm[o.id])} ${o.review_status === 'in_pipeline' ? '<span class="pill p-ok">in pipeline</span>' : ''}</div></div>
   </div>`; }).join('');
@@ -645,7 +730,7 @@ async function openDetail(id){
   target.innerHTML = `
     ${usePane ? '' : '<button class="close" onclick="closeDrawer()">×</button>'}
     <div class="sub">${esc(SOURCES[o.source_id])} · ${esc((o.opportunity_type||'').replace(/_/g,' '))} ${o.solicitation_number ? '· ' + esc(o.solicitation_number) : ''}</div>
-    <h2>${esc(o.title)}</h2>
+    <h2>${ax(o.title)}</h2>
     <div>${stagePill(o.stage)} ${eligPill(o)} ${reviewPill(o.review_status)} ${o.is_stale ? '<span class="pill p-check">stale</span>' : ''} ${o.no_longer_listed ? '<span class="pill p-check">no longer listed</span>' : ''}</div>
     <div class="actions">
       ${o.source_url ? `<a class="btn ghost small" href="${esc(o.source_url)}" target="_blank" rel="noopener">Open original ↗</a>` : ''}
