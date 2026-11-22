@@ -158,6 +158,9 @@
   .fbar .lab { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-weight:600; }
   .fchip { display:inline-flex; align-items:center; gap:4px; background:var(--blue-light); color:var(--blue-dark); border-radius:12px; padding:2px 8px; font-size:12px; font-weight:600; margin-left:6px; }
   .fchip button { border:none; background:none; cursor:pointer; color:var(--blue-dark); font-size:14px; line-height:1; padding:0; }
+  .ohead { display:flex; align-items:center; gap:12px; background:#fff; border:1px solid var(--border); border-left:5px solid var(--blue); border-radius:var(--radius); padding:10px 16px; margin-bottom:10px; }
+  .ohead h2 { font-size:17px; margin:0; } .ohead .sub { font-size:12.5px; }
+  .split { height:calc(100vh - 210px); }
   .toast { position:fixed; bottom:22px; left:50%; transform:translateX(-50%); background:#1f2328; color:#fff; padding:10px 18px; border-radius:8px; font-size:13px; display:none; z-index:40; }
   .toast.on { display:block; }
 </style>
@@ -242,6 +245,7 @@
       </details>
       <span class="count" id="opp-count"></span>
     </div>
+    <div id="opps-heading"></div>
     <div class="split">
       <div class="list" id="opps-table"></div>
       <div class="pane" id="opp-pane"><div class="empty">Select an opportunity to see Claude's assessment and give feedback.</div></div>
@@ -648,6 +652,7 @@ async function loadDash(){
 function jump(f){
   ['f-q','f-profile','f-juris','f-area','f-deadline','f-elig'].forEach(id => document.getElementById(id).value = '');
   FUNDER_FILTER = f.funder || null; if (f.funder) document.getElementById('f-sort').value = 'fit';
+  current = null; const pane = document.getElementById('opp-pane'); if (pane) pane.innerHTML = '<div class="empty">Select an opportunity to see Claude\'s assessment and give feedback.</div>';
   syncSourceOptions(); document.getElementById('f-source').value = '';
   if (f.juris) { document.getElementById('f-juris').value = f.juris; syncSourceOptions(); }
   if (f.area) { document.getElementById('f-area').value = f.area; document.getElementById('f-profile').value = '__all'; document.getElementById('f-sort').value = 'fit'; }
@@ -699,8 +704,8 @@ async function loadOpps(){
   if (v('f-sort') === 'fit') rows.sort((a, b) => (amap[b.id]?.fit_score ?? -1) - (amap[a.id]?.fit_score ?? -1));
   document.getElementById('opp-count').textContent = `${n ?? 0} ${n === 1 ? 'record' : 'records'}${n > 500 ? ' (first 500 shown)' : ''}`;
   document.getElementById('opp-count').textContent = `${rows.length} with fit ${minFit}+`;
-  if (area) document.getElementById('opp-count').textContent += ' · ' + AREAS.find(a => a[0] === area)[1] + ' is substantial or central';
-  if (FUNDER_FILTER) document.getElementById('opp-count').insertAdjacentHTML('beforeend', `<span class="fchip" title="${esc(funderFull(FUNDER_FILTER))}">Funder: ${esc(FUNDER_FILTER)} <button onclick="FUNDER_FILTER=null;loadOpps()" title="Clear">×</button></span>`);
+  renderOppsHeading(area, rows.length, minFit);
+  renderOppsHeading(area, rows.length, minFit);
   if (!rows.length) { document.getElementById('opps-table').innerHTML = '<div class="empty">No opportunities scoring ' + minFit + '+ match these filters. Lower-scoring items are stored; ask Claude to query them.</div>'; return; }
   const fbm = await loadFbMap(rows.map(o => o.id));
   document.getElementById('opps-table').innerHTML = rows.map(o => { const a = amap[o.id] || {}; const val = o.award_ceiling ?? o.total_program_funding; return `<div class="li ${current?.id === o.id ? 'sel' : ''}" id="li-${o.id}" onclick="openDetail('${o.id}')">
@@ -710,6 +715,18 @@ async function loadOpps(){
       <div class="meta">${dueText(o)}${val ? ' · ' + money(Number(val)) : ''}${geo(o) ? ' · ' + geo(o) : ''}</div>
       <div style="display:flex;gap:5px;flex-wrap:wrap">${area ? areaPill(o, area) : ''} ${eligPill(o)} ${fbSummary(fbm[o.id])} ${o.review_status === 'in_pipeline' ? '<span class="pill p-ok">in pipeline</span>' : ''}</div></div>
   </div>`; }).join('');
+}
+
+function renderOppsHeading(area, n, minFit){
+  const el = document.getElementById('opps-heading'); if (!el) return;
+  const parts = [];
+  if (area) { const label = AREAS.find(a => a[0] === area)[1];
+    parts.push({ color: AREA_COLORS[area], title: label, note: `Open opportunities where ${label} is a substantial or central part of the work, across all sources`, clear: `document.getElementById('f-area').value='';loadOpps()` }); }
+  if (FUNDER_FILTER) parts.push({ color: '#0C447C', title: ACRONYMS[FUNDER_FILTER] ? `<abbr title="${esc(ACRONYMS[FUNDER_FILTER])}">${esc(FUNDER_FILTER)}</abbr> <span style="font-weight:400;font-size:14px">${esc(ACRONYMS[FUNDER_FILTER])}</span>` : esc(funderFull(FUNDER_FILTER)), note: 'Open opportunities from this funder', clear: `FUNDER_FILTER=null;loadOpps()`, raw: true });
+  if (!parts.length) { el.innerHTML = ''; return; }
+  el.innerHTML = parts.map(p => `<div class="ohead" style="border-left-color:${p.color}">
+    <div><h2>${p.raw ? p.title : esc(p.title)}</h2><div class="sub">${n} ${n === 1 ? 'opportunity' : 'opportunities'} at fit ${minFit}+ · ${esc(p.note)}</div></div>
+    <button class="btn ghost small" style="margin-left:auto" onclick="${p.clear}">Show all ×</button></div>`).join('');
 }
 
 // ── detail ──
