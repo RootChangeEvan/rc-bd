@@ -102,6 +102,52 @@
   .vbtn { border:1px solid var(--border); background:#fff; border-radius:8px; padding:6px 10px; font-size:12.5px; cursor:pointer; }
   .vbtn.on-yes { background:var(--green-light); border-color:var(--green); color:#085041; font-weight:600; }
   .vbtn.on-no { background:var(--red-light); border-color:var(--red); color:var(--red); font-weight:600; }
+  /* compact dashboard */
+  .cards { grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin-bottom:14px; }
+  .card { padding:9px 12px; } .card .v { font-size:20px; }
+  .dash-grid { display:grid; grid-template-columns:minmax(0,2.1fr) minmax(280px,1fr); gap:16px; align-items:start; }
+  @media (max-width:1000px){ .dash-grid { grid-template-columns:1fr; } }
+  .fitcards { display:grid; grid-template-columns:repeat(auto-fill,minmax(290px,1fr)); gap:10px; }
+  .oc { border:1px solid var(--border); border-radius:10px; padding:10px 12px; background:#fff; cursor:pointer; display:flex; flex-direction:column; gap:3px; }
+  .oc:hover { border-color:var(--blue); }
+  .oc .top { display:flex; gap:9px; align-items:flex-start; }
+  .ttl { font-weight:600; font-size:13.5px; line-height:1.3; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+  .meta { font-size:12px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .due-hot { color:var(--red); font-weight:650; }
+  .linkbtn { background:none; border:none; color:var(--blue); font-size:12px; font-weight:600; cursor:pointer; padding:2px 0; }
+  .mini { list-style:none; margin:0; padding:0; } .mini li { padding:7px 0; border-bottom:1px solid var(--border); cursor:pointer; } .mini li:last-child { border-bottom:none; } .mini li:hover .ttl { color:var(--blue); }
+  .dials.compact { grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:10px; }
+  .dials.compact .dial { padding:8px 10px; } .dials.compact .dial svg { max-width:170px !important; }
+  details.panel > summary { cursor:pointer; font-weight:600; font-size:14px; }
+  /* feedback */
+  .fb { border-top:1px solid var(--border); margin-top:8px; padding-top:8px; display:flex; flex-direction:column; gap:7px; cursor:default; }
+  .fbrow { display:flex; align-items:center; gap:8px; font-size:12px; } .fbrow > span { width:58px; color:var(--muted); }
+  .seg { display:inline-flex; border:1px solid var(--border); border-radius:8px; overflow:hidden; }
+  .seg button { border:none; background:#fff; padding:4px 10px; font-size:12px; cursor:pointer; border-right:1px solid var(--border); }
+  .seg button:last-child { border-right:none; }
+  .seg button.on[data-v=strong], .seg button.on[data-v=pursue] { background:var(--green-light); color:#085041; font-weight:650; }
+  .seg button.on[data-v=partial], .seg button.on[data-v=consider] { background:var(--amber-light); color:var(--amber-dark); font-weight:650; }
+  .seg button.on[data-v=poor], .seg button.on[data-v=pass] { background:var(--red-light); color:var(--red); font-weight:650; }
+  .chips { display:flex; flex-wrap:wrap; gap:4px; align-items:center; } .chips .lbl { font-size:11px; color:var(--muted); width:100px; flex-shrink:0; }
+  .fb .chips { flex-wrap:wrap; } .fb { gap:5px; }
+  .chip { border:1px solid var(--border); background:#fff; border-radius:12px; padding:2px 8px; font-size:11.5px; cursor:pointer; }
+  .chip.on { background:var(--blue-light); border-color:var(--blue); color:var(--blue-dark); font-weight:600; }
+  .fb input.fbc { font-size:12.5px; padding:6px 8px; flex:1; }
+  .fbsum { display:inline-block; font-size:11px; padding:1px 7px; border-radius:10px; font-weight:600; }
+  .fbsum.strong { background:var(--green-light); color:#085041; } .fbsum.partial { background:var(--amber-light); color:var(--amber-dark); } .fbsum.poor { background:var(--red-light); color:var(--red); }
+  /* opportunities split view */
+  .filters.compact { gap:6px; margin-bottom:10px; } .filters.compact select, .filters.compact input[type=text] { padding:5px 7px; font-size:12.5px; }
+  details.more { display:inline-block; } details.more > summary { cursor:pointer; font-size:12.5px; color:var(--blue); font-weight:600; list-style:none; padding:5px 4px; }
+  details.more[open] { display:flex; flex-wrap:wrap; gap:6px; flex-basis:100%; align-items:center; } details.more[open] > summary { flex-basis:100%; }
+  .split { display:grid; grid-template-columns:minmax(340px,430px) minmax(0,1fr); gap:14px; height:calc(100vh - 150px); }
+  .split .list { overflow-y:auto; background:#fff; border:1px solid var(--border); border-radius:var(--radius); }
+  .split .pane { overflow-y:auto; background:#fff; border:1px solid var(--border); border-radius:var(--radius); padding:18px 22px 30px; }
+  .split .pane h2 { font-size:18px; margin:4px 0 6px; }
+  .li { display:flex; gap:10px; padding:9px 12px; border-bottom:1px solid var(--border); cursor:pointer; }
+  .li:hover { background:#fafaf8; } .li.sel { background:var(--blue-light); }
+  .li .fitcol { width:42px; flex-shrink:0; text-align:center; } .li .fitcol .sub { font-size:10.5px; }
+  .li .body { min-width:0; flex:1; display:flex; flex-direction:column; gap:2px; }
+  @media (max-width:1000px){ .split { grid-template-columns:1fr; height:auto; } .split .pane { display:none; } }
   .toast { position:fixed; bottom:22px; left:50%; transform:translateX(-50%); background:#1f2328; color:#fff; padding:10px 18px; border-radius:8px; font-size:13px; display:none; z-index:40; }
   .toast.on { display:block; }
 </style>
@@ -144,39 +190,48 @@
       <div class="sub" id="last-scan">—</div></div>
       <button class="btn" style="margin-left:auto" id="scan-btn" onclick="scanNow()">Scan now</button>
     </div>
-    <div class="panel"><h2>Where federal funding is leaning <span class="sub" style="font-weight:400">· share of new solicitations substantially involving each area, by two-month period</span></h2>
-      <div class="dials" id="dials"></div>
-      <div class="note" id="dials-note"></div></div>
     <div class="cards" id="stat-cards"></div>
-    <div class="panel"><h2 style="display:flex;align-items:center;gap:10px">Best fit <span class="sub" style="font-weight:400">· Claude assessment, open opportunities</span>
-      <label class="sub" style="margin-left:auto;font-weight:400">Dashboard shows fit
-        <select id="min-fit" onchange="setMinFit(this.value)"><option>60</option><option>65</option><option>70</option><option>75</option><option>80</option></select> and above</label></h2><div class="note" id="calib-line" style="margin:-4px 0 8px"></div><div id="topfit-list"></div></div>
-    <div class="grid2">
-      <div class="panel"><h2>Closing soonest <span class="sub" style="font-weight:400">· fit <span class="minfit-label">60</span>+</span></h2><div id="closing-list"></div></div>
-      <div class="panel"><h2>Recent changes <span class="sub" style="font-weight:400">· relevant opportunities only</span></h2><div id="changes-list"></div></div>
+    <div class="dash-grid">
+      <div class="panel"><h2 style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">Best fit <span class="sub" style="font-weight:400">· open, scored by Claude</span>
+        <label class="sub" style="margin-left:auto;font-weight:400">Show fit
+          <select id="min-fit" onchange="setMinFit(this.value)"><option>60</option><option>65</option><option>70</option><option>75</option><option>80</option></select>+</label></h2>
+        <div class="note" id="calib-line" style="margin:-4px 0 10px"></div>
+        <div id="topfit-list"></div></div>
+      <div>
+        <div class="panel"><h2>Closing soonest <span class="sub" style="font-weight:400">· fit <span class="minfit-label">60</span>+</span></h2><div id="closing-list"></div></div>
+        <div class="panel"><h2>Recent changes <span class="sub" style="font-weight:400">· fit <span class="minfit-label">60</span>+</span></h2><div id="changes-list"></div></div>
+      </div>
     </div>
-    <div class="panel"><h2>Source health</h2><div id="sources-table"></div>
-      <div class="note" style="margin-top:8px">A failed source is shown here, never as zero results. Scheduled scans: Monday and Thursday, about 6:15 a.m. Eastern (USAspending Mondays only).</div></div>
+    <div class="panel"><h2>Where federal funding is leaning <span class="sub" style="font-weight:400">· share of new solicitations substantially involving each area, by two-month period · click a dial for its opportunities</span></h2>
+      <div class="dials compact" id="dials"></div>
+      <div class="note" id="dials-note"></div></div>
+    <details class="panel"><summary>Source health</summary><div id="sources-table" style="margin-top:10px"></div>
+      <div class="note" style="margin-top:8px">A failed source is shown here, never as zero results. Scheduled scans: Monday and Thursday, about 6:15 a.m. Eastern (USAspending Mondays only).</div></details>
   </section>
 
   <!-- OPPORTUNITIES -->
   <section class="view" id="v-opps">
-    <div class="filters">
-      <input type="text" id="f-q" placeholder="Search title, agency, description" style="width:250px" onkeydown="if(event.key==='Enter')loadOpps()">
+    <div class="filters compact">
+      <input type="text" id="f-q" placeholder="Search" style="width:170px" onkeydown="if(event.key==='Enter')loadOpps()">
       <select id="f-juris" onchange="syncSourceOptions(); loadOpps()" title="Federal, California, and other jurisdictions as sources are added"><option value="">All jurisdictions</option></select>
       <select id="f-area" onchange="loadOpps()" title="Cross-cutting: opportunities where this capability area is a substantial part of the work"><option value="">Any capability area</option></select>
-      <select id="f-profile" onchange="loadOpps()"><option value="">All profiles (matched)</option><option value="__all">Everything captured</option></select>
-      <select id="f-source" onchange="loadOpps()"><option value="">All sources</option></select>
-      <select id="f-stage" onchange="loadOpps()"><option value="open">Open + upcoming + potential</option><option value="active">Active</option><option value="upcoming">Upcoming</option><option value="potential">Potential (awards ending)</option><option value="closed">Closed</option><option value="">Any stage</option></select>
-      <select id="f-deadline" onchange="loadOpps()"><option value="">Any deadline</option><option value="7">Closing in 7 days</option><option value="14">Closing in 14 days</option><option value="30">Closing in 30 days</option><option value="rolling">Rolling</option></select>
-      <select id="f-elig" onchange="loadOpps()"><option value="">Any eligibility</option><option value="check">Check eligibility</option><option value="eligible_via_rcv">Prime via RC Ventures (small business set-aside)</option><option value="not_eligible_prime">Not eligible as prime</option></select>
-      <select id="f-review" onchange="loadOpps()"><option value="__open" selected>All except dismissed</option><option value="new">New</option><option value="reviewing">Reviewing</option><option value="pursue">Pursue</option><option value="in_pipeline">In pipeline</option><option value="pass">Dismissed (not for us / pass)</option><option value="">Any status</option></select>
       <select id="f-sort" onchange="loadOpps()"><option value="deadline">Sort: deadline</option><option value="fit">Sort: fit score</option></select>
       <select id="f-fit" onchange="loadOpps()"><option value="60">Fit 60+</option><option value="65">Fit 65+</option><option value="70">Fit 70+</option><option value="75">Fit 75+</option><option value="80">Fit 80+</option></select>
-      <label class="sub"><input type="checkbox" id="f-stale" onchange="loadOpps()"> include stale</label>
+      <select id="f-review" onchange="loadOpps()"><option value="__open" selected>All except passed</option><option value="new">No decision yet</option><option value="reviewing">Considering</option><option value="pursue">Pursuing</option><option value="in_pipeline">In pipeline</option><option value="pass">Passed</option><option value="">Any status</option></select>
+      <details class="more"><summary>More filters ▾</summary>
+        <select id="f-profile" onchange="loadOpps()"><option value="">All profiles (matched)</option><option value="__all">Everything captured</option></select>
+        <select id="f-source" onchange="loadOpps()"><option value="">All sources</option></select>
+        <select id="f-stage" onchange="loadOpps()"><option value="open">Open + upcoming + potential</option><option value="active">Active</option><option value="upcoming">Upcoming</option><option value="potential">Potential (awards ending)</option><option value="closed">Closed</option><option value="">Any stage</option></select>
+        <select id="f-deadline" onchange="loadOpps()"><option value="">Any deadline</option><option value="7">Closing in 7 days</option><option value="14">Closing in 14 days</option><option value="30">Closing in 30 days</option><option value="rolling">Rolling</option></select>
+        <select id="f-elig" onchange="loadOpps()"><option value="">Any eligibility</option><option value="check">Check eligibility</option><option value="eligible_via_rcv">Prime via RC Ventures (small business set-aside)</option><option value="not_eligible_prime">Not eligible as prime</option></select>
+        <label class="sub"><input type="checkbox" id="f-stale" onchange="loadOpps()"> include stale</label>
+      </details>
       <span class="count" id="opp-count"></span>
     </div>
-    <div class="panel" style="padding:4px 8px"><div id="opps-table"></div></div>
+    <div class="split">
+      <div class="list" id="opps-table"></div>
+      <div class="pane" id="opp-pane"><div class="empty">Select an opportunity to see Claude's assessment and give feedback.</div></div>
+    </div>
   </section>
 
   <!-- PROFILES -->
@@ -260,10 +315,29 @@ function deadline(o){
 }
 function geo(o){ const g = [...(o.country_codes||[]), ...(o.states||[])].join(', '); return esc(g || o.geography_text || ''); }
 function agency(o){ const top = o.source_id === 'sam' ? titleCase(o.top_level_agency) : (o.top_level_agency || ''); const sub = o.bureau || o.agency_name || ''; return esc(top) + (sub && sub !== top ? '<div class="sub">' + esc(o.source_id==='sam' ? titleCase(sub) : sub) + '</div>' : ''); }
+function agencyShort(o){ const top = o.source_id === 'sam' ? titleCase(o.top_level_agency) : (o.top_level_agency || ''); const sub = o.bureau || o.agency_name || ''; return sub && sub !== top && top ? (o.source_id === 'sam' ? titleCase(sub) : sub) + ' · ' + top : (top || sub); }
+function dueText(o){
+  if (o.source_id === 'usaspending') return o.award_end_date ? 'Ends ' + fdate(o.award_end_date) : '—';
+  if (o.deadline_rolling) return 'Rolling';
+  if (!o.deadline) return esc(o.deadline_text ? o.deadline_text.slice(0, 40) : 'No deadline listed');
+  const days = Math.ceil((Date.parse(o.deadline) - Date.now()) / 864e5);
+  const d = new Date(o.deadline).toLocaleDateString('en-US', { month:'short', day:'numeric' });
+  return days < 0 ? 'Closed ' + d : `<span class="${days <= 3 ? 'due-hot' : ''}">Due ${d} · ${days === 0 ? 'today' : days + 'd'}</span>`;
+}
+function oppCard(o, a, vd){
+  const val = o.award_ceiling ?? o.total_program_funding;
+  return `<div class="oc" onclick="openDetail('${o.id}')">
+    <div class="top"><span class="fit ${a.fit_score >= 60 ? 'fit-hi' : 'fit-mid'}">${a.fit_score}</span><div class="ttl">${esc(o.title)}</div></div>
+    <div class="meta" title="${esc(agencyShort(o))}">${esc(agencyShort(o))} · ${esc(SOURCES[o.source_id] || o.source_id)}</div>
+    <div class="meta">${esc(a.recommended_role || '')}${val ? ' · ' + money(Number(val)) : ''} · ${dueText(o)}</div>
+    <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">${eligPill(o)} ${fbSummary(vd)}<button class="linkbtn" style="margin-left:auto" onclick="toggleFb('${o.id}', event)">${vd ? 'Edit feedback' : 'Give feedback'}</button></div>
+    <div id="fbw-${o.id}" hidden>${fbForm(o.id, a.fit_score, vd)}</div>
+  </div>`;
+}
 const stagePill = s => s ? `<span class="pill p-${esc(s)}">${esc(s)}</span>` : '';
 const areaPill = (o, k) => { const t = Array.isArray(o.scan_tags) ? o.scan_tags[0] : o.scan_tags; const v = t ? t[k] : 0; return v >= 2 ? `<span class="apill">${v >= 3 ? 'Central' : 'Substantial'}: ${esc(AREAS.find(a => a[0] === k)[1])}</span>` : ''; };
 const eligPill = o => o.eligibility_flag === 'not_eligible_prime' ? `<span class="pill p-warn" title="${esc(o.set_aside||'')}">Not eligible as prime</span>` : o.eligibility_flag === 'eligible_via_rcv' ? `<span class="pill p-rcv" title="${esc(o.set_aside||'')}">Prime via RC Ventures</span>` : '';
-const reviewPill = r => r && r !== 'new' ? `<span class="pill p-status">${esc(r === 'pass' ? 'dismissed' : r.replace('_',' '))}</span>` : '';
+const reviewPill = r => r && r !== 'new' ? `<span class="pill p-status">${esc({ pass:'passed', reviewing:'considering', pursue:'pursuing', in_pipeline:'in pipeline' }[r] || r)}</span>` : '';
 const fitBadge = a => a && a.fit_score != null ? `<span class="fit ${a.fit_score >= 60 ? 'fit-hi' : a.fit_score >= 40 ? 'fit-mid' : 'fit-lo'}" title="${esc(a.recommended_role || '')}">${a.fit_score}</span><div class="sub">${esc(a.recommended_role || '')}</div>` : '<span class="sub">—</span>';
 const DIM_LABELS = { technical_alignment:'Technical alignment (30%)', activities_deliverables:'Activities & deliverables (20%)', geographic_fit:'Geographic fit (15%)', eligibility_feasibility:'Eligibility & feasibility (15%)', financial_attractiveness:'Financial attractiveness (10%)', partnership_potential:'Partnership potential (10%)' };
 async function assessMap(ids){ if (!ids.length) return {}; const { data } = await db.from('scan_assessments').select('opportunity_id,fit_score,recommended_role,confidence,error').in('opportunity_id', ids); return Object.fromEntries((data||[]).map(a => [a.opportunity_id, a])); }
@@ -317,28 +391,66 @@ async function setMinFit(v){
   await db.from('scan_settings').upsert({ key:'dashboard_min_fit', value:String(v), updated_at:new Date().toISOString() }, { onConflict:'key' });
   toast('Dashboard now shows fit ' + v + ' and above'); loadDash();
 }
-async function saveVerdict(id, verdict, score, inputId){
-  const reason = inputId ? (document.getElementById(inputId)?.value || '').trim() : '';
-  const { error } = await db.from('scan_verdicts').upsert({ opportunity_id: id, verdict, reason: reason || null, fit_score_at_verdict: score, created_at: new Date().toISOString() }, { onConflict: 'opportunity_id' });
-  if (error) return toast('Could not save verdict: ' + error.message);
-  const { data: cur } = await db.from('scan_opportunities').select('review_status').eq('id', id).single();
-  const next = verdict === 'not_for_us' ? (['pursue','in_pipeline'].includes(cur?.review_status) ? cur.review_status : 'pass') : (['new','pass'].includes(cur?.review_status) ? 'reviewing' : cur?.review_status);
-  if (next && next !== cur?.review_status) await db.from('scan_opportunities').update({ review_status: next, updated_at: new Date().toISOString() }).eq('id', id);
-  toast(verdict === 'worth_a_look' ? 'Saved: worth a look (moved to Reviewing)' : 'Saved: not for us (dismissed; find it under Status → Dismissed)');
-  if (current && current.id === id && document.getElementById('drawer').classList.contains('on')) openDetail(id);
+// ── feedback: fit (is this our kind of work?) is separate from decision (do we chase this one now?) ──
+const FB_FIT = [['strong','Strong fit'],['partial','Partial'],['poor','Poor fit']];
+const FB_DEC = [['pursue','Pursue'],['consider','Consider'],['pass','Pass']];
+const FB_TAGS = [
+  ['Why it fits', ['Core capability','Strong past performance','Good partner / prime angle','Right geography','Strategic priority']],
+  ['Why it doesn\'t', ['Wrong sector / too technical','Not our role','Too small','Too big / compliance-heavy','Wrong geography','Not eligible']],
+  ['Timing & capacity', ['Deadline too close','No capacity now','Already teaming elsewhere','Need a partner first']],
+];
+let FBMAP = {};
+async function loadFbMap(ids){ if (!ids.length) return {}; const { data } = await db.from('scan_verdicts').select('*').in('opportunity_id', ids); return Object.fromEntries((data||[]).map(v => [v.opportunity_id, v])); }
+function fbSummary(vd){
+  if (!vd || (!vd.fit_rating && !vd.decision)) return '';
+  const f = FB_FIT.find(x => x[0] === vd.fit_rating), d = FB_DEC.find(x => x[0] === vd.decision);
+  return `<span class="fbsum ${esc(vd.fit_rating || '')}" title="${esc([...(vd.reasons||[]), vd.reason || ''].filter(Boolean).join(' · '))}">${[f?.[1], d?.[1]].filter(Boolean).join(' · ')}</span>`;
+}
+function fbForm(oid, score, vd){
+  vd = vd || {};
+  const seg = (k, opts, cur) => `<div class="seg" data-k="${k}">${opts.map(([v,l]) => `<button type="button" data-v="${v}" class="${cur===v?'on':''}" onclick="segPick(this)">${l}</button>`).join('')}</div>`;
+  const tags = new Set(vd.reasons || []);
+  return `<div class="fb" data-oid="${oid}" data-score="${score ?? ''}" onclick="event.stopPropagation()">
+    <div class="fbrow"><span>Fit</span>${seg('fit', FB_FIT, vd.fit_rating)}</div>
+    <div class="fbrow"><span>Decision</span>${seg('decision', FB_DEC, vd.decision)}</div>
+    ${FB_TAGS.map(([g, list]) => `<div class="chips"><span class="lbl">${g}</span>${list.map(t => `<button type="button" class="chip ${tags.has(t)?'on':''}" onclick="this.classList.toggle('on')">${esc(t)}</button>`).join('')}</div>`).join('')}
+    <div class="fbrow" style="gap:6px"><input type="text" class="fbc" placeholder="Comment: what makes this right or wrong for us?" value="${esc(vd.reason || '')}" onkeydown="if(event.key==='Enter')saveFb(this)"><button class="btn small" onclick="saveFb(this)">Save</button></div>
+  </div>`;
+}
+function segPick(b){ const on = b.classList.contains('on'); b.parentElement.querySelectorAll('button').forEach(x => x.classList.remove('on')); if (!on) b.classList.add('on'); }
+function toggleFb(oid, ev){ if (ev) ev.stopPropagation(); const el = document.getElementById('fbw-' + oid); if (el) el.hidden = !el.hidden; }
+async function saveFb(el){
+  const box = el.closest('.fb'), oid = box.dataset.oid, score = box.dataset.score ? Number(box.dataset.score) : null;
+  const pick = k => box.querySelector(`.seg[data-k=${k}] button.on`)?.dataset.v || null;
+  const fit = pick('fit'), decision = pick('decision');
+  const reasons = [...box.querySelectorAll('.chip.on')].map(c => c.textContent);
+  const comment = box.querySelector('.fbc').value.trim();
+  if (!fit && !decision && !reasons.length && !comment) return toast('Pick a fit or decision, or add a comment.');
+  const verdict = fit ? (fit === 'poor' ? 'not_for_us' : 'worth_a_look') : (decision === 'pass' ? 'not_for_us' : 'worth_a_look');
+  const { error } = await db.from('scan_verdicts').upsert({ opportunity_id: oid, verdict, fit_rating: fit, decision, reasons, reason: comment || null, fit_score_at_verdict: score, updated_at: new Date().toISOString() }, { onConflict: 'opportunity_id' });
+  if (error) return toast('Could not save feedback: ' + error.message);
+  if (decision) {
+    const { data: cur } = await db.from('scan_opportunities').select('review_status').eq('id', oid).single();
+    const st = cur?.review_status;
+    const next = st === 'in_pipeline' ? st : decision === 'pursue' ? 'pursue' : decision === 'pass' ? 'pass' : (st === 'pursue' ? st : 'reviewing');
+    if (next !== st) await db.from('scan_opportunities').update({ review_status: next, updated_at: new Date().toISOString() }).eq('id', oid);
+  }
+  toast(decision === 'pass' ? 'Saved. Passed items leave the lists (Status → Passed to see them); your fit rating still trains the scoring.' : 'Feedback saved. It trains the next scoring run.', 4500);
   if (document.getElementById('v-dash').classList.contains('on')) loadDash();
+  if (document.getElementById('v-opps').classList.contains('on')) { await loadOpps(); if (current?.id === oid) openDetail(oid); }
+  else if (current?.id === oid && document.getElementById('drawer').classList.contains('on')) openDetail(oid);
 }
 async function loadCalibration(){
-  const { data } = await db.from('scan_verdicts').select('verdict,fit_score_at_verdict');
-  const v = data || [], yes = v.filter(x => x.verdict === 'worth_a_look'), no = v.filter(x => x.verdict === 'not_for_us');
+  const { data } = await db.from('scan_verdicts').select('verdict,fit_rating,fit_score_at_verdict');
+  const v = (data || []).map(x => ({ ...x, verdict: x.fit_rating ? (x.fit_rating === 'poor' ? 'not_for_us' : 'worth_a_look') : x.verdict })).filter(x => x.verdict), yes = v.filter(x => x.verdict === 'worth_a_look'), no = v.filter(x => x.verdict === 'not_for_us');
   const avg = a => a.length ? Math.round(a.reduce((s, x) => s + (x.fit_score_at_verdict ?? 0), 0) / a.length) : null;
-  let line = `Provisional guide: 55+ look closely · 45–54 skim · below 45 ignore. Your verdicts so far: ${yes.length} worth a look, ${no.length} not for us.`;
+  let line = ` Your fit ratings so far: ${yes.length} strong or partial, ${no.length} poor.`;
   if (v.length >= 25) {
     const scores = [...new Set(v.map(x => x.fit_score_at_verdict))].sort((a,b) => a-b);
     let best = 50, bestAcc = 0;
     for (const t of scores) { const acc = v.filter(x => (x.fit_score_at_verdict >= t) === (x.verdict === 'worth_a_look')).length / v.length; if (acc > bestAcc) { bestAcc = acc; best = t; } }
-    line = `Calibrated from your ${v.length} verdicts: <b>${best}+ is worth a look</b> (matches your calls ${Math.round(bestAcc*100)}% of the time). Averages: worth a look ${avg(yes)}, not for us ${avg(no)}.`;
-  } else if (v.length) line += ` Threshold calibrates automatically at 25 verdicts (${25 - v.length} to go).`;
+    line = `Calibrated from your ${v.length} fit ratings: <b>${best}+ is usually a fit</b> (matches your calls ${Math.round(bestAcc*100)}% of the time). Average score: fits ${avg(yes)}, poor fits ${avg(no)}.`;
+  } else if (v.length) line += ` The threshold calibrates itself at 25 ratings (${25 - v.length} to go).`;
   const el = document.getElementById('calib-line'); if (el) el.innerHTML = line;
 }
 const profNames = ids => (ids||[]).map(id => profiles.find(p => p.id === id)?.name).filter(Boolean);
@@ -418,8 +530,8 @@ async function loadDash(){
   const sel = document.getElementById('min-fit'); if (sel) sel.value = String(RELEVANT);
   document.querySelectorAll('.minfit-label').forEach(e => e.textContent = RELEVANT);
   loadDials(); loadCalibration();
-  const { data: vlist } = await db.from('scan_verdicts').select('opportunity_id,verdict');
-  const vmap = Object.fromEntries((vlist||[]).map(x => [x.opportunity_id, x.verdict]));
+  const { data: vlist } = await db.from('scan_verdicts').select('*');
+  const fbmap = Object.fromEntries((vlist||[]).map(x => [x.opportunity_id, x]));
   const now = new Date(), iso = d => new Date(now.getTime() + d*864e5).toISOString();
   const { data: fitRows } = await db.from('scan_assessments').select('opportunity_id,fit_score,scan_opportunities!inner(stage,is_stale,review_status,first_seen_at,deadline)').gte('fit_score', RELEVANT).in('scan_opportunities.stage',['active','upcoming']).eq('scan_opportunities.is_stale', false).neq('scan_opportunities.review_status','pass');
   const fr = (fitRows||[]).map(r => r.scan_opportunities);
@@ -432,18 +544,18 @@ async function loadDash(){
     card('Fit ' + RELEVANT + '+ (open)', nFit, "jump({fit:true})") +
     card('New in last 7 days', nNew, "jump({fit:true})") +
     card('Closing in 7 / 14 / 30 days', `${n7} / ${n14} / ${n30}`, "jump({deadline:'30', fit:true})") +
-    card('Under review / pursue', nReview, "jump({review:'reviewing', fit:true})");
-  const { data: top0 } = await db.from('scan_assessments').select('fit_score,recommended_role,opportunity_id,scan_opportunities!inner(id,title,source_id,stage,is_stale,review_status,deadline,deadline_rolling,deadline_text,deadline_tz,award_end_date,top_level_agency,bureau,agency_name)').not('fit_score','is',null).in('scan_opportunities.stage',['active','upcoming']).eq('scan_opportunities.is_stale', false).neq('scan_opportunities.review_status','pass').order('fit_score', { ascending:false }).limit(30);
-  const top = (top0||[]).filter(a => vmap[a.opportunity_id] !== 'not_for_us' && a.fit_score >= RELEVANT).slice(0, 10);
-  document.getElementById('topfit-list').innerHTML = (top||[]).length ? `<table>${top.map(a => { const o = a.scan_opportunities; return `<tr class="row" onclick="openDetail('${o.id}')"><td style="width:70px">${fitBadge(a)}</td><td><div class="t-title">${esc(o.title)}</div><div class="sub">${esc(SOURCES[o.source_id])} · ${agency(o).replace(/<div class="sub">/,' · ').replace('</div>','')}</div></td><td style="white-space:nowrap">${deadline(o)}</td><td style="white-space:nowrap" onclick="event.stopPropagation()"><button class="vbtn ${vmap[o.id]==='worth_a_look'?'on-yes':''}" onclick="saveVerdict('${o.id}','worth_a_look',${a.fit_score})">👍 Worth a look</button> <button class="vbtn ${vmap[o.id]==='not_for_us'?'on-no':''}" onclick="saveVerdict('${o.id}','not_for_us',${a.fit_score})">👎 Not for us</button></td></tr>`; }).join('')}</table><div class="note" style="margin-top:6px">Open an item to add a reason with your verdict. Reasons teach the scoring the most.</div>` : '<div class="empty">No open opportunities score ' + RELEVANT + ' or higher right now. Lower-scoring items are stored; ask Claude to query them.</div>';
+    card('Considering / pursuing', nReview, "jump({review:'reviewing', fit:true})");
+  const { data: top0 } = await db.from('scan_assessments').select('fit_score,recommended_role,opportunity_id,scan_opportunities!inner(id,title,source_id,stage,is_stale,review_status,deadline,deadline_rolling,deadline_text,deadline_tz,award_end_date,top_level_agency,bureau,agency_name,award_ceiling,total_program_funding,eligibility_flag,set_aside)').not('fit_score','is',null).in('scan_opportunities.stage',['active','upcoming']).eq('scan_opportunities.is_stale', false).neq('scan_opportunities.review_status','pass').order('fit_score', { ascending:false }).limit(30);
+  const top = (top0||[]).filter(a => fbmap[a.opportunity_id]?.decision !== 'pass' && a.fit_score >= RELEVANT).slice(0, 12);
+  document.getElementById('topfit-list').innerHTML = top.length ? `<div class="fitcards">${top.map(a => oppCard(a.scan_opportunities, a, fbmap[a.opportunity_id])).join('')}</div>` : '<div class="empty">No open opportunities score ' + RELEVANT + ' or higher right now. Lower-scoring items are stored; ask Claude to query them.</div>';
   const { data: soon0 } = await matchedOpen(db.from('scan_opportunities').select(LIST_COLS)).gte('deadline', iso(0)).order('deadline').limit(80);
   const smap = await assessMap((soon0||[]).map(o => o.id));
-  const soon = (soon0||[]).filter(o => (smap[o.id]?.fit_score ?? -1) >= RELEVANT).slice(0, 8);
-  document.getElementById('closing-list').innerHTML = (soon||[]).length ? `<table>${soon.map(o => `<tr class="row" onclick="openDetail('${o.id}')"><td><div class="t-title">${esc(o.title)}</div><div class="sub">${esc(SOURCES[o.source_id])} · ${agency(o).replace(/<div class="sub">/,' · ').replace('</div>','')}</div></td><td style="white-space:nowrap">${deadline(o)}</td></tr>`).join('')}</table>` : '<div class="empty">Nothing with fit ' + RELEVANT + '+ is closing soon.</div>';
+  const soon = (soon0||[]).filter(o => (smap[o.id]?.fit_score ?? -1) >= RELEVANT && fbmap[o.id]?.decision !== 'pass').slice(0, 6);
+  document.getElementById('closing-list').innerHTML = soon.length ? `<ul class="mini">${soon.map(o => `<li onclick="openDetail('${o.id}')"><div class="ttl">${esc(o.title)}</div><div class="meta">${dueText(o)} · fit ${smap[o.id]?.fit_score ?? '—'} · ${esc(agencyShort(o))}</div></li>`).join('')}</ul>` : '<div class="empty">Nothing with fit ' + RELEVANT + '+ is closing soon.</div>';
   const { data: ch0 } = await db.from('scan_changes').select('field,old_value,new_value,detected_at,opportunity_id,scan_opportunities(title,review_status)').order('detected_at', { ascending:false }).limit(150);
   const cmap = await assessMap([...new Set((ch0||[]).map(c => c.opportunity_id))]);
-  const ch = (ch0||[]).filter(c => c.scan_opportunities?.review_status !== 'pass' && (cmap[c.opportunity_id]?.fit_score ?? -1) >= RELEVANT).slice(0, 10);
-  document.getElementById('changes-list').innerHTML = (ch||[]).length ? `<table>${ch.map(c => `<tr class="row" onclick="openDetail('${c.opportunity_id}')"><td><div class="t-title">${esc(c.scan_opportunities?.title || '')}</div><div class="sub">${esc(c.field)}: ${esc((c.old_value||'—').slice(0,40))} → ${esc((c.new_value||'—').slice(0,40))}</div></td><td class="sub" style="white-space:nowrap">${ago(c.detected_at)}</td></tr>`).join('')}</table>` : '<div class="empty">No changes to relevant opportunities yet.</div>';
+  const ch = (ch0||[]).filter(c => c.scan_opportunities?.review_status !== 'pass' && (cmap[c.opportunity_id]?.fit_score ?? -1) >= RELEVANT).slice(0, 6);
+  document.getElementById('changes-list').innerHTML = ch.length ? `<ul class="mini">${ch.map(c => `<li onclick="openDetail('${c.opportunity_id}')"><div class="ttl">${esc(c.scan_opportunities?.title || '')}</div><div class="meta">${esc(c.field.replace(/_/g,' '))}: ${esc((c.old_value||'—').slice(0,24))} → ${esc((c.new_value||'—').slice(0,24))} · ${ago(c.detected_at)}</div></li>`).join('')}</ul>` : '<div class="empty">No changes to relevant opportunities yet.</div>';
   const [{ data: srcs }, { data: runs }] = await Promise.all([ db.from('scan_sources').select('*').order('id'), db.from('scan_runs').select('*').order('started_at', { ascending:false }).limit(30) ]);
   const latest = id => (runs||[]).find(r => r.source_id === id);
   document.getElementById('sources-table').innerHTML = `<table><tr><th>Source</th><th>Last run</th><th>Result</th><th>Found / new / changed</th><th>Last success</th><th>API calls today</th></tr>${(srcs||[]).map(s => { const r = latest(s.id); const st = r ? r.status : 'never'; const cls = st==='success'?'p-ok':st==='partial'?'p-partial':st==='running'?'p-check':'p-fail'; return `<tr><td><b>${esc(s.name)}</b>${s.enabled?'':' <span class="sub">(off)</span>'}</td><td>${ago(s.last_run_at)}</td><td><span class="pill ${cls}">${esc(st)}</span>${r&&r.error?`<div class="sub" style="max-width:340px">${esc(r.error)}</div>`:''}</td><td>${r?`${r.records_found} / ${r.records_new} / ${r.records_changed}`:'—'}</td><td>${ago(s.last_success_at)}</td><td>${s.daily_call_budget ? `${s.calls_date === new Date().toISOString().slice(0,10) ? s.calls_today : 0} of ${s.daily_call_budget}` : '<span class="sub">no limit</span>'}</td></tr>`; }).join('')}</table>`;
@@ -505,12 +617,14 @@ async function loadOpps(){
   document.getElementById('opp-count').textContent = `${rows.length} with fit ${minFit}+`;
   if (area) document.getElementById('opp-count').textContent += ' · ' + AREAS.find(a => a[0] === area)[1] + ' is substantial or central';
   if (!rows.length) { document.getElementById('opps-table').innerHTML = '<div class="empty">No opportunities scoring ' + minFit + '+ match these filters. Lower-scoring items are stored; ask Claude to query them.</div>'; return; }
-  document.getElementById('opps-table').innerHTML = `<table><tr><th>Fit</th><th>Opportunity</th><th>Source</th><th>Agency</th><th>Geography</th><th>Value</th><th>Deadline</th><th>Stage</th><th>Profiles</th></tr>${rows.map(o => `<tr class="row" onclick="openDetail('${o.id}')">
-    <td style="width:70px">${fitBadge(amap[o.id])}</td>
-    <td style="max-width:420px"><div class="t-title">${esc(o.title)}</div><div>${area ? areaPill(o, area) : ''} ${eligPill(o)} ${reviewPill(o.review_status)}</div></td>
-    <td>${esc(SOURCES[o.source_id])}<div class="sub">${esc((o.opportunity_type||'').replace(/_/g,' '))}</div></td>
-    <td style="max-width:220px">${agency(o)}</td><td>${geo(o)}</td><td>${value(o)}</td><td style="white-space:nowrap">${deadline(o)}</td><td>${stagePill(o.stage)}</td>
-    <td class="sub" style="max-width:180px">${esc(profNames(o.match_profiles).join(', '))}</td></tr>`).join('')}</table>`;
+  const fbm = await loadFbMap(rows.map(o => o.id));
+  document.getElementById('opps-table').innerHTML = rows.map(o => { const a = amap[o.id] || {}; const val = o.award_ceiling ?? o.total_program_funding; return `<div class="li ${current?.id === o.id ? 'sel' : ''}" id="li-${o.id}" onclick="openDetail('${o.id}')">
+    <div class="fitcol"><span class="fit ${a.fit_score >= 60 ? 'fit-hi' : 'fit-mid'}">${a.fit_score ?? '—'}</span><div class="sub">${esc(a.recommended_role || '')}</div></div>
+    <div class="body"><div class="ttl">${esc(o.title)}</div>
+      <div class="meta" title="${esc(agencyShort(o))}">${esc(agencyShort(o))} · ${esc(SOURCES[o.source_id] || o.source_id)}</div>
+      <div class="meta">${dueText(o)}${val ? ' · ' + money(Number(val)) : ''}${geo(o) ? ' · ' + geo(o) : ''}</div>
+      <div style="display:flex;gap:5px;flex-wrap:wrap">${area ? areaPill(o, area) : ''} ${eligPill(o)} ${fbSummary(fbm[o.id])} ${o.review_status === 'in_pipeline' ? '<span class="pill p-ok">in pipeline</span>' : ''}</div></div>
+  </div>`; }).join('');
 }
 
 // ── detail ──
@@ -525,16 +639,20 @@ async function openDetail(id){
   current = o;
   const amt = (label, v) => `<div>${label}</div><div>${v == null ? '<span class="sub">Unknown</span>' : money(Number(v))}</div>`;
   const isAward = o.source_id === 'usaspending';
-  document.getElementById('drawer').innerHTML = `
-    <button class="close" onclick="closeDrawer()">×</button>
+  const usePane = document.getElementById('v-opps').classList.contains('on') && window.innerWidth > 1000;
+  document.querySelectorAll('.li.sel').forEach(e => e.classList.remove('sel')); document.getElementById('li-' + id)?.classList.add('sel');
+  const target = usePane ? document.getElementById('opp-pane') : document.getElementById('drawer');
+  target.innerHTML = `
+    ${usePane ? '' : '<button class="close" onclick="closeDrawer()">×</button>'}
     <div class="sub">${esc(SOURCES[o.source_id])} · ${esc((o.opportunity_type||'').replace(/_/g,' '))} ${o.solicitation_number ? '· ' + esc(o.solicitation_number) : ''}</div>
     <h2>${esc(o.title)}</h2>
     <div>${stagePill(o.stage)} ${eligPill(o)} ${reviewPill(o.review_status)} ${o.is_stale ? '<span class="pill p-check">stale</span>' : ''} ${o.no_longer_listed ? '<span class="pill p-check">no longer listed</span>' : ''}</div>
     <div class="actions">
       ${o.source_url ? `<a class="btn ghost small" href="${esc(o.source_url)}" target="_blank" rel="noopener">Open original ↗</a>` : ''}
-      ${['reviewing','pursue','pass','new'].map(s => `<button class="btn ghost small" onclick="setStatus('${s}')" ${o.review_status===s?'disabled':''}>${s === 'new' ? 'Reset' : s[0].toUpperCase()+s.slice(1)}</button>`).join('')}
+      ${o.review_status && o.review_status !== 'new' ? `<button class="btn ghost small" onclick="setStatus('new')">Reset status</button>` : ''}
       ${o.pipeline_opportunity_id ? `<span class="pill p-ok" style="align-self:center">In BD pipeline (#${o.pipeline_opportunity_id})</span>` : `<button class="btn small" onclick="openPipe()">Send to pipeline</button>`}
     </div>
+    ${asmt && asmt.fit_score != null ? `<div class="assess" style="padding:10px 14px"><b style="font-size:13px">Your feedback</b> <span class="sub">· trains the scoring</span>${fbForm(o.id, asmt.fit_score, vd)}</div>` : ''}
     ${assessBlock(asmt, vd, o.id)}
     <div class="kv">
       <div>Agency</div><div>${agency(o)}</div>
@@ -557,7 +675,7 @@ async function openDetail(id){
     <h3 style="font-size:14px;margin:18px 0 6px">Change history</h3>
     ${(ch||[]).length ? `<table>${ch.map(c => `<tr><td class="sub" style="white-space:nowrap">${fdate(c.detected_at)}</td><td><b>${esc(c.field)}</b>: ${esc(c.old_value ?? '—')} → ${esc(c.new_value ?? '—')}</td></tr>`).join('')}</table>` : '<div class="sub">No changes since first seen.</div>'}
     <details style="margin-top:18px"><summary class="sub">Original source record</summary><pre style="font-size:11px;white-space:pre-wrap;background:#fafaf8;padding:10px;border-radius:8px">${esc(JSON.stringify(o.raw, null, 2))}</pre></details>`;
-  document.getElementById('shade').classList.add('on'); document.getElementById('drawer').classList.add('on');
+  if (usePane) target.scrollTop = 0; else { document.getElementById('shade').classList.add('on'); document.getElementById('drawer').classList.add('on'); }
 }
 function assessBlock(a, vd, oid){
   if (!a || a.fit_score == null) return `<div class="assess"><b>Claude fit assessment</b><div class="sub" style="margin:6px 0 10px">${a && a.error ? 'Last attempt failed: ' + esc(a.error) : 'Not assessed yet.'}</div><button class="btn small" id="assess-btn" onclick="runAssess()">Assess with Claude</button></div>`;
@@ -573,10 +691,6 @@ function assessBlock(a, vd, oid){
     <div style="margin:12px 0">${Object.entries(DIM_LABELS).map(([k,l]) => `<div class="dim"><span>${l}</span><span class="bar"><i style="width:${a.dimensions?.[k] ?? 0}%"></i></span><span>${a.dimensions?.[k] ?? '—'}</span></div>`).join('')}</div>
     <b>Evidence</b>${(a.evidence||[]).map(e => `<div class="ev">${e.verified ? '✓' : '<span title="Quote not found word-for-word in the notice">⚠</span>'} ${esc(e.point)}${e.quote ? ` <q>${esc(e.quote)}</q>` : ''}</div>`).join('') || '<div class="sub">None.</div>'}
     <div class="grid2" style="margin-top:10px"><div><b>Gaps</b>${list(a.gaps)}</div><div><b>Eligibility concerns</b>${list(a.eligibility_concerns)}</div></div>
-    <div class="verdict"><b style="font-size:13px">Your verdict</b>
-      <button class="vbtn ${vd?.verdict==='worth_a_look'?'on-yes':''}" onclick="saveVerdict('${oid}','worth_a_look',${a.fit_score},'v-reason')">👍 Worth a look</button>
-      <button class="vbtn ${vd?.verdict==='not_for_us'?'on-no':''}" onclick="saveVerdict('${oid}','not_for_us',${a.fit_score},'v-reason')">👎 Not for us</button>
-      <input type="text" id="v-reason" placeholder="Why? (optional, e.g. 'too clinical', 'great fit for network mapping')" value="${esc(vd?.reason || '')}"></div>
     <div class="note" style="margin-top:10px">Screening heuristic, not a probability of winning. ✓ = quote found word-for-word in the notice. ${esc(a.model || '')} · ${fdate(a.created_at)}</div>
   </div>`;
 }
@@ -592,7 +706,7 @@ function closeDrawer(){ document.getElementById('shade').classList.remove('on');
 async function setStatus(s){
   const { error } = await db.from('scan_opportunities').update({ review_status: s, updated_at: new Date().toISOString() }).eq('id', current.id);
   if (error) return toast('Could not update: ' + error.message);
-  toast('Marked ' + s); openDetail(current.id); if (document.getElementById('v-opps').classList.contains('on')) loadOpps();
+  toast('Status reset'); if (document.getElementById('v-opps').classList.contains('on')) await loadOpps(); openDetail(current.id);
 }
 async function saveNotes(){
   const { error } = await db.from('scan_opportunities').update({ notes: document.getElementById('d-notes').value, updated_at: new Date().toISOString() }).eq('id', current.id);
