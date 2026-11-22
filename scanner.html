@@ -190,6 +190,9 @@
       <div class="sub" id="last-scan">—</div></div>
       <button class="btn" style="margin-left:auto" id="scan-btn" onclick="scanNow()">Scan now</button>
     </div>
+    <div class="panel"><h2>Where federal funding is leaning <span class="sub" style="font-weight:400">· share of new solicitations substantially involving each area, by two-month period · click a dial for its opportunities</span></h2>
+      <div class="dials compact" id="dials"></div>
+      <div class="note" id="dials-note"></div></div>
     <div class="cards" id="stat-cards"></div>
     <div class="dash-grid">
       <div class="panel"><h2 style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">Best fit <span class="sub" style="font-weight:400">· open, scored by Claude</span>
@@ -198,13 +201,10 @@
         <div class="note" id="calib-line" style="margin:-4px 0 10px"></div>
         <div id="topfit-list"></div></div>
       <div>
-        <div class="panel"><h2>Closing soonest <span class="sub" style="font-weight:400">· fit <span class="minfit-label">60</span>+</span></h2><div id="closing-list"></div></div>
+        <div class="panel"><h2>Upcoming deadlines <span class="sub" style="font-weight:400">· fit <span class="minfit-label">60</span>+, a week or more out</span></h2><div id="closing-list"></div></div>
         <div class="panel"><h2>Recent changes <span class="sub" style="font-weight:400">· fit <span class="minfit-label">60</span>+</span></h2><div id="changes-list"></div></div>
       </div>
     </div>
-    <div class="panel"><h2>Where federal funding is leaning <span class="sub" style="font-weight:400">· share of new solicitations substantially involving each area, by two-month period · click a dial for its opportunities</span></h2>
-      <div class="dials compact" id="dials"></div>
-      <div class="note" id="dials-note"></div></div>
     <details class="panel"><summary>Source health</summary><div id="sources-table" style="margin-top:10px"></div>
       <div class="note" style="margin-top:8px">A failed source is shown here, never as zero results. Scheduled scans: Monday and Thursday, about 6:15 a.m. Eastern (USAspending Mondays only).</div></details>
   </section>
@@ -310,7 +310,7 @@ function value(o){ const v = o.award_ceiling ?? o.total_program_funding; return 
 function deadline(o){
   if (o.source_id === 'usaspending') return o.award_end_date ? 'Ends ' + fdate(o.award_end_date) : '—';
   if (o.deadline_rolling) return 'Rolling';
-  if (o.deadline) { const d = fdate(o.deadline); const days = Math.ceil((Date.parse(o.deadline) - Date.now())/864e5); const soon = days >= 0 && days <= 14 ? ` <span class="pill p-warn">${days}d</span>` : ''; return d + soon + (o.deadline_tz && o.deadline_tz.startsWith('unverified') ? '<div class="sub">time unverified</div>' : ''); }
+  if (o.deadline) { const d = fdate(o.deadline); const days = Math.ceil((Date.parse(o.deadline) - Date.now())/864e5); return d + (o.deadline_tz && o.deadline_tz.startsWith('unverified') ? '<div class="sub">time unverified</div>' : ''); }
   return '<span class="sub">' + esc(o.deadline_text || '—') + '</span>';
 }
 function geo(o){ const g = [...(o.country_codes||[]), ...(o.states||[])].join(', '); return esc(g || o.geography_text || ''); }
@@ -322,7 +322,7 @@ function dueText(o){
   if (!o.deadline) return esc(o.deadline_text ? o.deadline_text.slice(0, 40) : 'No deadline listed');
   const days = Math.ceil((Date.parse(o.deadline) - Date.now()) / 864e5);
   const d = new Date(o.deadline).toLocaleDateString('en-US', { month:'short', day:'numeric' });
-  return days < 0 ? 'Closed ' + d : `<span class="${days <= 3 ? 'due-hot' : ''}">Due ${d} · ${days === 0 ? 'today' : days + 'd'}</span>`;
+  return days < 0 ? 'Closed ' + d : `Due ${d}`;
 }
 function oppCard(o, a, vd){
   const val = o.award_ceiling ?? o.total_program_funding;
@@ -536,22 +536,22 @@ async function loadDash(){
   const { data: fitRows } = await db.from('scan_assessments').select('opportunity_id,fit_score,scan_opportunities!inner(stage,is_stale,review_status,first_seen_at,deadline)').gte('fit_score', RELEVANT).in('scan_opportunities.stage',['active','upcoming']).eq('scan_opportunities.is_stale', false).neq('scan_opportunities.review_status','pass');
   const fr = (fitRows||[]).map(r => r.scan_opportunities);
   const nFit = fr.length;
-  const within = d => fr.filter(o => o.deadline && o.deadline >= iso(0) && o.deadline <= iso(d)).length;
-  const nNew = fr.filter(o => o.first_seen_at >= iso(-7)).length, n7 = within(7), n14 = within(14), n30 = within(30);
+  const nNew = fr.filter(o => o.first_seen_at >= iso(-7)).length;
+  const nRunway = fr.filter(o => o.deadline && o.deadline >= iso(7) && o.deadline <= iso(60)).length;
   const nReview = fr.filter(o => ['reviewing','pursue'].includes(o.review_status)).length;
   const card = (k, v, f) => `<div class="card ${f?'click':''}" ${f?`onclick="${f}"`:''}><div class="k">${k}</div><div class="v">${v}</div></div>`;
   document.getElementById('stat-cards').innerHTML =
     card('Fit ' + RELEVANT + '+ (open)', nFit, "jump({fit:true})") +
     card('New in last 7 days', nNew, "jump({fit:true})") +
-    card('Closing in 7 / 14 / 30 days', `${n7} / ${n14} / ${n30}`, "jump({deadline:'30', fit:true})") +
+    card('Due in 1–8 weeks', nRunway, "jump({fit:true})") +
     card('Considering / pursuing', nReview, "jump({review:'reviewing', fit:true})");
   const { data: top0 } = await db.from('scan_assessments').select('fit_score,recommended_role,opportunity_id,scan_opportunities!inner(id,title,source_id,stage,is_stale,review_status,deadline,deadline_rolling,deadline_text,deadline_tz,award_end_date,top_level_agency,bureau,agency_name,award_ceiling,total_program_funding,eligibility_flag,set_aside)').not('fit_score','is',null).in('scan_opportunities.stage',['active','upcoming']).eq('scan_opportunities.is_stale', false).neq('scan_opportunities.review_status','pass').order('fit_score', { ascending:false }).limit(30);
   const top = (top0||[]).filter(a => fbmap[a.opportunity_id]?.decision !== 'pass' && a.fit_score >= RELEVANT).slice(0, 12);
   document.getElementById('topfit-list').innerHTML = top.length ? `<div class="fitcards">${top.map(a => oppCard(a.scan_opportunities, a, fbmap[a.opportunity_id])).join('')}</div>` : '<div class="empty">No open opportunities score ' + RELEVANT + ' or higher right now. Lower-scoring items are stored; ask Claude to query them.</div>';
-  const { data: soon0 } = await matchedOpen(db.from('scan_opportunities').select(LIST_COLS)).gte('deadline', iso(0)).order('deadline').limit(80);
+  const { data: soon0 } = await matchedOpen(db.from('scan_opportunities').select(LIST_COLS)).gte('deadline', iso(7)).order('deadline').limit(80);
   const smap = await assessMap((soon0||[]).map(o => o.id));
   const soon = (soon0||[]).filter(o => (smap[o.id]?.fit_score ?? -1) >= RELEVANT && fbmap[o.id]?.decision !== 'pass').slice(0, 6);
-  document.getElementById('closing-list').innerHTML = soon.length ? `<ul class="mini">${soon.map(o => `<li onclick="openDetail('${o.id}')"><div class="ttl">${esc(o.title)}</div><div class="meta">${dueText(o)} · fit ${smap[o.id]?.fit_score ?? '—'} · ${esc(agencyShort(o))}</div></li>`).join('')}</ul>` : '<div class="empty">Nothing with fit ' + RELEVANT + '+ is closing soon.</div>';
+  document.getElementById('closing-list').innerHTML = soon.length ? `<ul class="mini">${soon.map(o => `<li onclick="openDetail('${o.id}')"><div class="ttl">${esc(o.title)}</div><div class="meta">${dueText(o)} · fit ${smap[o.id]?.fit_score ?? '—'} · ${esc(agencyShort(o))}</div></li>`).join('')}</ul>` : '<div class="empty">No fit ' + RELEVANT + '+ deadlines in the coming weeks.</div>';
   const { data: ch0 } = await db.from('scan_changes').select('field,old_value,new_value,detected_at,opportunity_id,scan_opportunities(title,review_status)').order('detected_at', { ascending:false }).limit(150);
   const cmap = await assessMap([...new Set((ch0||[]).map(c => c.opportunity_id))]);
   const ch = (ch0||[]).filter(c => c.scan_opportunities?.review_status !== 'pass' && (cmap[c.opportunity_id]?.fit_score ?? -1) >= RELEVANT).slice(0, 6);
