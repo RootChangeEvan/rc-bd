@@ -161,6 +161,12 @@
   .ohead { display:flex; align-items:center; gap:12px; background:#fff; border:1px solid var(--border); border-left:5px solid var(--blue); border-radius:var(--radius); padding:10px 16px; margin-bottom:10px; }
   .ohead h2 { font-size:17px; margin:0; } .ohead .sub { font-size:12.5px; }
   .split { height:calc(100vh - 210px); }
+  .bell { background:none; border:1px solid var(--border); border-radius:8px; padding:4px 9px; cursor:pointer; font-size:14px; position:relative; }
+  .bell-n { background:var(--red); color:#fff; border-radius:10px; font-size:11px; font-weight:700; padding:0 6px; margin-left:2px; }
+  .star { background:none; border:none; cursor:pointer; font-size:15px; color:#b9b8b3; padding:0 2px; line-height:1; }
+  .star.on { color:#d98a00; }
+  .wl li { position:relative; padding-left:14px; } .wl li.upd::before { content:''; position:absolute; left:0; top:12px; width:7px; height:7px; border-radius:50%; background:var(--blue); }
+  .chg { font-size:12px; color:var(--blue-dark); margin-top:2px; } .chg b { font-weight:650; }
   .toast { position:fixed; bottom:22px; left:50%; transform:translateX(-50%); background:#1f2328; color:#fff; padding:10px 18px; border-radius:8px; font-size:13px; display:none; z-index:40; }
   .toast.on { display:block; }
 </style>
@@ -189,6 +195,7 @@
     <button data-v="profiles" onclick="show('profiles')">Profiles</button>
   </nav>
   <div class="hdr-right">
+    <button class="bell" id="bell" onclick="goWatching()" title="Updates on opportunities you watch">🔔 <span id="bell-n" class="bell-n" hidden>0</span></button>
     <a href="./">BD pipeline ↗</a>
     <span id="who"></span>
     <a href="#" id="signout-link" onclick="signOut();return false;">Sign out</a>
@@ -218,6 +225,7 @@
         <div class="note" id="calib-line" style="margin:-4px 0 10px"></div>
         <div id="topfit-list"></div></div>
       <div>
+        <div class="panel" id="watch-panel"><h2 style="display:flex;align-items:center;gap:8px">Watching <span class="sub" style="font-weight:400" id="watch-sub"></span><button class="linkbtn" id="watch-seen-all" style="margin-left:auto" onclick="markSeen(null)" hidden>Mark all seen</button></h2><div id="watch-list"></div></div>
         <div class="panel"><h2>Upcoming deadlines <span class="sub" style="font-weight:400">· fit <span class="minfit-label">60</span>+, a week or more out</span></h2><div id="closing-list"></div></div>
         <div class="panel"><h2>Recent changes <span class="sub" style="font-weight:400">· fit <span class="minfit-label">60</span>+</span></h2><div id="changes-list"></div></div>
       </div>
@@ -234,7 +242,7 @@
       <select id="f-area" onchange="loadOpps()" title="Cross-cutting: opportunities where this capability area is a substantial part of the work"><option value="">Any capability area</option></select>
       <select id="f-sort" onchange="loadOpps()"><option value="deadline">Sort: deadline</option><option value="fit">Sort: fit score</option></select>
       <select id="f-fit" onchange="loadOpps()"><option value="60">Fit 60+</option><option value="65">Fit 65+</option><option value="70">Fit 70+</option><option value="75">Fit 75+</option><option value="80">Fit 80+</option></select>
-      <select id="f-review" onchange="loadOpps()"><option value="__open" selected>All except passed</option><option value="new">No decision yet</option><option value="reviewing">Considering</option><option value="pursue">Pursuing</option><option value="in_pipeline">In pipeline</option><option value="pass">Passed</option><option value="">Any status</option></select>
+      <select id="f-review" onchange="loadOpps()"><option value="__open" selected>All except passed</option><option value="__watch">★ Watching</option><option value="new">No decision yet</option><option value="reviewing">Considering</option><option value="pursue">Pursuing</option><option value="in_pipeline">In pipeline</option><option value="pass">Passed</option><option value="">Any status</option></select>
       <details class="more"><summary>More filters ▾</summary>
         <select id="f-profile" onchange="loadOpps()"><option value="">All profiles (matched)</option><option value="__all">Everything captured</option></select>
         <select id="f-source" onchange="loadOpps()"><option value="">All sources</option></select>
@@ -350,7 +358,7 @@ function dueText(o){
 function oppCard(o, a, vd){
   const val = o.award_ceiling ?? o.total_program_funding;
   return `<div class="oc" onclick="openDetail('${o.id}')">
-    <div class="top"><span class="fit ${a.fit_score >= 60 ? 'fit-hi' : 'fit-mid'}">${a.fit_score}</span><div class="ttl">${ax(o.title)}</div></div>
+    <div class="top"><span class="fit ${a.fit_score >= 60 ? 'fit-hi' : 'fit-mid'}">${a.fit_score}</span><div class="ttl" style="flex:1">${ax(o.title)}</div><span data-star="${o.id}">${starBtn(o.id)}</span></div>
     <div class="meta">${ax(agencyShort(o))} · ${esc(SOURCES[o.source_id] || o.source_id)}</div>
     <div class="meta">${esc(a.recommended_role || '')}${val ? ' · ' + money(Number(val)) : ''} · ${dueText(o)}${o.expected_award_date ? ' · ' + awardText(o) : ''}</div>
     <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">${eligPill(o)} ${fbSummary(vd)}<button class="linkbtn" style="margin-left:auto" onclick="toggleFb('${o.id}', event)">${vd ? 'Edit feedback' : 'Give feedback'}</button></div>
@@ -395,6 +403,73 @@ function funderKey(o){
 }
 const funderFull = k => ACRONYMS[k] || (k === 'State' ? 'U.S. Department of State' : k === 'California' ? 'State of California agencies (California Grants Portal)' : k);
 let FUNDER_FILTER = null;
+
+// ── watching: in-app alerts on opportunities you follow ──
+let WATCH = {};   // opportunity_id -> watch row
+const WATCH_FIELDS = ['source_status','stage','deadline','deadline_rolling','forecast_close_date','expected_award_date','award_ceiling','total_program_funding','eligibility_text','set_aside','title','opportunity_type'];
+async function loadWatches(){ const { data } = await db.from('scan_watches').select('*'); WATCH = Object.fromEntries((data||[]).map(w => [w.opportunity_id, w])); return WATCH; }
+const starBtn = id => `<button class="star ${WATCH[id] ? 'on' : ''}" title="${WATCH[id] ? 'Watching: click to stop' : 'Watch: flag changes to this opportunity'}" onclick="toggleWatch('${id}', event)">${WATCH[id] ? '★' : '☆'}</button>`;
+async function toggleWatch(id, ev){
+  if (ev) ev.stopPropagation();
+  if (WATCH[id]) { const { error } = await db.from('scan_watches').delete().eq('opportunity_id', id); if (error) return toast('Could not update: ' + error.message); delete WATCH[id]; toast('Stopped watching'); }
+  else { const { data, error } = await db.from('scan_watches').insert({ opportunity_id: id }).select().single(); if (error) return toast('Could not watch: ' + error.message); WATCH[id] = data; toast('Watching. Changes will be flagged on the dashboard and the 🔔 in the header.', 4500); }
+  document.querySelectorAll(`[data-star="${id}"]`).forEach(el => el.innerHTML = starBtn(id));
+  if (document.getElementById('v-dash').classList.contains('on')) loadWatchPanel();
+  refreshBell();
+}
+const fmtVal = (f, v) => v == null || v === '' ? '—' : /date|deadline/.test(f) && /^\d{4}-\d{2}-\d{2}/.test(v) ? fdate(v.slice(0,10)) : /award_ceiling|program_funding/.test(f) && !isNaN(Number(v)) ? money(Number(v)) : String(v).slice(0, 60);
+function describeChange(c){
+  const f = c.field, o = c.old_value, n = c.new_value;
+  if (f === 'source_status' && /forecast/i.test(o || '') && /posted/i.test(n || '')) return '<b>Now posted</b>: applications are open';
+  if (f === 'stage' && n === 'closed') return '<b>Closed</b>';
+  if (f === 'stage') return null;   // covered by source_status
+  if (f === 'deadline') return o ? `<b>Deadline moved</b>: ${fmtVal(f,o)} → ${fmtVal(f,n)}` : `<b>Deadline set</b>: ${fmtVal(f,n)}`;
+  if (f === 'forecast_close_date') return `<b>Forecast deadline moved</b>: ${fmtVal(f,o)} → ${fmtVal(f,n)}`;
+  if (f === 'expected_award_date') return `<b>Predicted award date moved</b>: ${fmtVal(f,o)} → ${fmtVal(f,n)}`;
+  if (f === 'award_ceiling' || f === 'total_program_funding') return `<b>Funding changed</b>: ${fmtVal(f,o)} → ${fmtVal(f,n)}`;
+  if (f === 'eligibility_text') return '<b>Eligibility wording changed</b>';
+  if (f === 'set_aside') return `<b>Set-aside changed</b>: ${esc(n || 'none')}`;
+  if (f === 'title') return '<b>Retitled</b>';
+  if (f === 'deadline_rolling') return n === 'true' ? '<b>Now rolling</b> (no fixed deadline)' : null;
+  return `<b>${esc(f.replace(/_/g,' '))} changed</b>`;
+}
+async function watchUpdates(){
+  const ids = Object.keys(WATCH); if (!ids.length) return {};
+  const since = Math.min(...ids.map(id => Date.parse(WATCH[id].last_seen_at)));
+  const { data } = await db.from('scan_changes').select('opportunity_id,field,old_value,new_value,detected_at').in('opportunity_id', ids).in('field', WATCH_FIELDS).gt('detected_at', new Date(since).toISOString()).order('detected_at', { ascending:false }).limit(300);
+  const out = {};
+  (data||[]).forEach(c => { if (Date.parse(c.detected_at) <= Date.parse(WATCH[c.opportunity_id].last_seen_at)) return; const t = describeChange(c); if (!t) return; (out[c.opportunity_id] ||= []).push({ t, at: c.detected_at }); });
+  return out;
+}
+async function refreshBell(){
+  if (!Object.keys(WATCH).length) await loadWatches();
+  const upd = await watchUpdates(); const n = Object.keys(upd).length;
+  const b = document.getElementById('bell-n'); if (b) { b.textContent = n; b.hidden = !n; }
+  return upd;
+}
+async function loadWatchPanel(){
+  await loadWatches();
+  const ids = Object.keys(WATCH), el = document.getElementById('watch-list'); if (!el) return;
+  if (!ids.length) { el.innerHTML = '<div class="sub">Click ☆ on any opportunity to watch it. When it changes (posted, dates moved, funding or terms changed) it shows here and on the 🔔.</div>'; document.getElementById('watch-sub').textContent = ''; document.getElementById('watch-seen-all').hidden = true; refreshBell(); return; }
+  const [upd, { data: opps }] = await Promise.all([ refreshBell(), db.from('scan_opportunities').select(LIST_COLS).in('id', ids) ]);
+  const rows = (opps||[]).sort((a, b) => (upd[b.id] ? 1 : 0) - (upd[a.id] ? 1 : 0) || ((effDue(a)?.t ?? 9e15) - (effDue(b)?.t ?? 9e15)));
+  const nUpd = Object.keys(upd).length;
+  document.getElementById('watch-sub').textContent = `· ${ids.length} watched${nUpd ? ` · ${nUpd} with updates` : ''}`;
+  document.getElementById('watch-seen-all').hidden = !nUpd;
+  el.innerHTML = `<ul class="mini wl">${rows.map(o => `<li class="${upd[o.id] ? 'upd' : ''}" onclick="openDetail('${o.id}'); markSeen('${o.id}', true)">
+    <div style="display:flex;gap:6px;align-items:flex-start"><div class="ttl" style="flex:1">${ax(o.title)}</div><span data-star="${o.id}">${starBtn(o.id)}</span></div>
+    <div class="meta">${dueText(o)}${o.expected_award_date ? ' · ' + awardText(o) : ''}${o.stage === 'closed' || o.no_longer_listed ? ' · closed' : ''}</div>
+    ${(upd[o.id] || []).slice(0, 3).map(u => `<div class="chg">${u.t} <span class="sub">· ${ago(u.at)}</span></div>`).join('')}</li>`).join('')}</ul>`;
+}
+async function markSeen(id, quiet){
+  const ids = id ? [id] : Object.keys(WATCH); if (!ids.length) return;
+  const now = new Date().toISOString();
+  await db.from('scan_watches').update({ last_seen_at: now }).in('opportunity_id', ids);
+  ids.forEach(i => { if (WATCH[i]) WATCH[i].last_seen_at = now; });
+  if (!quiet) toast('Marked as seen');
+  if (document.getElementById('v-dash').classList.contains('on')) loadWatchPanel(); else refreshBell();
+}
+function goWatching(){ show('dash'); setTimeout(() => document.getElementById('watch-panel')?.scrollIntoView({ behavior:'smooth', block:'start' }), 300); }
 
 // ── dashboard visuals ──
 const AREA_COLORS = { networks:'#2a78d6', governance:'#7b5cc4', learning:'#1D9E75', resilience:'#d98a00', other:'#a8a7a2' };
@@ -602,7 +677,8 @@ function show(v){
 let started = false;
 async function init(){
   if (started) return; started = true;
-  await Promise.all([loadProfiles(), loadSourceMeta()]);
+  await Promise.all([loadProfiles(), loadSourceMeta(), loadWatches()]);
+  refreshBell();
   const sel = document.getElementById('f-profile');
   profiles.forEach(p => sel.insertAdjacentHTML('beforeend', `<option value="${p.id}">${esc(p.name)}</option>`));
   loadDash();
@@ -620,7 +696,7 @@ async function loadDash(){
   RELEVANT = Math.max(FLOOR, mf && !isNaN(Number(mf.value)) ? Number(mf.value) : FLOOR);
   const sel = document.getElementById('min-fit'); if (sel) sel.value = String(RELEVANT);
   document.querySelectorAll('.minfit-label').forEach(e => e.textContent = RELEVANT);
-  loadDials(); loadCalibration();
+  loadDials(); loadCalibration(); loadWatchPanel();
   const { data: vlist } = await db.from('scan_verdicts').select('*');
   const fbmap = Object.fromEntries((vlist||[]).map(x => [x.opportunity_id, x]));
   const now = new Date(), iso = d => new Date(now.getTime() + d*864e5).toISOString();
@@ -648,7 +724,7 @@ async function loadDash(){
   const { data: ch0 } = await db.from('scan_changes').select('field,old_value,new_value,detected_at,opportunity_id,scan_opportunities(title,review_status)').order('detected_at', { ascending:false }).limit(150);
   const cmap = await assessMap([...new Set((ch0||[]).map(c => c.opportunity_id))]);
   const ch = (ch0||[]).filter(c => c.scan_opportunities?.review_status !== 'pass' && (cmap[c.opportunity_id]?.fit_score ?? -1) >= RELEVANT).slice(0, 6);
-  document.getElementById('changes-list').innerHTML = ch.length ? `<ul class="mini">${ch.map(c => `<li onclick="openDetail('${c.opportunity_id}')"><div class="ttl">${ax(c.scan_opportunities?.title || '')}</div><div class="meta">${esc(c.field.replace(/_/g,' '))}: ${esc((c.old_value||'—').slice(0,24))} → ${esc((c.new_value||'—').slice(0,24))} · ${ago(c.detected_at)}</div></li>`).join('')}</ul>` : '<div class="empty">No changes to relevant opportunities yet.</div>';
+  document.getElementById('changes-list').innerHTML = ch.length ? `<ul class="mini">${ch.map(c => `<li onclick="openDetail('${c.opportunity_id}')"><div class="ttl">${ax(c.scan_opportunities?.title || '')}</div><div class="chg">${describeChange(c) || esc(c.field.replace(/_/g,' ')) + ' changed'} <span class="sub">· ${ago(c.detected_at)}</span></div></li>`).join('')}</ul>` : '<div class="empty">No changes to relevant opportunities yet.</div>';
   const [{ data: srcs }, { data: runs }] = await Promise.all([ db.from('scan_sources').select('*').order('id'), db.from('scan_runs').select('*').order('started_at', { ascending:false }).limit(30) ]);
   const latest = id => (runs||[]).find(r => r.source_id === id);
   document.getElementById('sources-table').innerHTML = `<table><tr><th>Source</th><th>Last run</th><th>Result</th><th>Found / new / changed</th><th>Last success</th><th>API calls today</th></tr>${(srcs||[]).map(s => { const r = latest(s.id); const st = r ? r.status : 'never'; const cls = st==='success'?'p-ok':st==='partial'?'p-partial':st==='running'?'p-check':'p-fail'; return `<tr><td><b>${esc(s.name)}</b>${s.enabled?'':' <span class="sub">(off)</span>'}</td><td>${ago(s.last_run_at)}</td><td><span class="pill ${cls}">${esc(st)}</span>${r&&r.error?`<div class="sub" style="max-width:340px">${esc(r.error)}</div>`:''}</td><td>${r?`${r.records_found} / ${r.records_new} / ${r.records_changed}`:'—'}</td><td>${ago(s.last_success_at)}</td><td>${s.daily_call_budget ? `${s.calls_date === new Date().toISOString().slice(0,10) ? s.calls_today : 0} of ${s.daily_call_budget}` : '<span class="sub">no limit</span>'}</td></tr>`; }).join('')}</table>`;
@@ -697,7 +773,7 @@ async function loadOpps(){
   const st = v('f-stage'); if (st === 'open') q = q.in('stage', ['active','upcoming','potential']); else if (st) q = q.eq('stage', st);
   const dl = v('f-deadline'); if (dl === 'rolling') q = q.eq('deadline_rolling', true); else if (dl) q = q.gte('deadline', new Date().toISOString()).lte('deadline', new Date(Date.now() + dl*864e5).toISOString());
   if (v('f-elig')) q = q.eq('eligibility_flag', v('f-elig'));
-  if (v('f-review') === '__open') q = q.neq('review_status', 'pass'); else if (v('f-review')) q = q.eq('review_status', v('f-review'));
+  if (v('f-review') === '__open') q = q.neq('review_status', 'pass'); else if (v('f-review') === '__watch') q = q.in('id', Object.keys(WATCH).length ? Object.keys(WATCH) : ['00000000-0000-0000-0000-000000000000']); else if (v('f-review')) q = q.eq('review_status', v('f-review'));
   if (!document.getElementById('f-stale').checked) q = q.eq('is_stale', false);
   const text = v('f-q').trim().replace(/[,()%*]/g, ' ');
   if (text) q = q.or(`title.ilike.*${text}*,agency_name.ilike.*${text}*,recipient_name.ilike.*${text}*,description.ilike.*${text}*`);
@@ -716,7 +792,7 @@ async function loadOpps(){
   const fbm = await loadFbMap(rows.map(o => o.id));
   document.getElementById('opps-table').innerHTML = rows.map(o => { const a = amap[o.id] || {}; const val = o.award_ceiling ?? o.total_program_funding; return `<div class="li ${current?.id === o.id ? 'sel' : ''}" id="li-${o.id}" onclick="openDetail('${o.id}')">
     <div class="fitcol"><span class="fit ${a.fit_score >= 60 ? 'fit-hi' : 'fit-mid'}">${a.fit_score ?? '—'}</span><div class="sub">${esc(a.recommended_role || '')}</div></div>
-    <div class="body"><div class="ttl">${ax(o.title)}</div>
+    <div class="body"><div style="display:flex;gap:6px;align-items:flex-start"><div class="ttl" style="flex:1">${ax(o.title)}</div><span data-star="${o.id}">${starBtn(o.id)}</span></div>
       <div class="meta">${ax(agencyShort(o))} · ${esc(SOURCES[o.source_id] || o.source_id)}</div>
       <div class="meta">${dueText(o)}${o.expected_award_date ? ' · ' + awardText(o) : ''}${val ? ' · ' + money(Number(val)) : ''}${geo(o) ? ' · ' + geo(o) : ''}</div>
       <div style="display:flex;gap:5px;flex-wrap:wrap">${area ? areaPill(o, area) : ''} ${eligPill(o)} ${fbSummary(fbm[o.id])} ${o.review_status === 'in_pipeline' ? '<span class="pill p-ok">in pipeline</span>' : ''}</div></div>
@@ -756,6 +832,7 @@ async function openDetail(id){
     <h2>${ax(o.title)}</h2>
     <div>${stagePill(o.stage)} ${eligPill(o)} ${reviewPill(o.review_status)} ${o.is_stale ? '<span class="pill p-check">stale</span>' : ''} ${o.no_longer_listed ? '<span class="pill p-check">no longer listed</span>' : ''}</div>
     <div class="actions">
+      <span data-star-btn="${o.id}"><button class="btn ghost small" onclick="toggleWatch('${o.id}', event).then(() => openDetail('${o.id}'))">${WATCH[o.id] ? '★ Watching' : '☆ Watch'}</button></span>
       ${o.source_url ? `<a class="btn ghost small" href="${esc(o.source_url)}" target="_blank" rel="noopener">Open original ↗</a>` : ''}
       ${o.review_status && o.review_status !== 'new' ? `<button class="btn ghost small" onclick="setStatus('new')">Reset status</button>` : ''}
       ${o.pipeline_opportunity_id ? `<span class="pill p-ok" style="align-self:center">In BD pipeline (#${o.pipeline_opportunity_id})</span>` : `<button class="btn small" onclick="openPipe()">Send to pipeline</button>`}
