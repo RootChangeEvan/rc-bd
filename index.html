@@ -295,10 +295,11 @@
       <button class="filter-btn" onclick="setFilter('Deferred', this)">Deferred</button>
       <button class="filter-btn" onclick="setPortfolioFilter('Fiscal Sponsorship', this)">Fiscal Sponsorship</button>
       <button class="filter-btn" onclick="setPortfolioFilter('RC Ventures', this)">RC Ventures</button>
+      <button class="filter-btn" onclick="setFilter('__archived', this)" title="Archived opportunities stay in the database as the record">Archived</button>
       <span id="opp-count" style="font-size:12px;color:var(--text-muted);margin-left:auto;"></span>
       <button class="btn-primary" onclick="openModal()">+ Add opportunity</button>
     </div>
-    <div style="font-size:12px;color:var(--text-muted);margin:-4px 0 10px;">Click a row to edit it; ✕ removes it. Changes notify subscribers (see Notifications) and appear in the banner.</div>
+    <div style="font-size:12px;color:var(--text-muted);margin:-4px 0 10px;">Click a row to edit it. Archive takes an item off the dashboard but keeps it in the database (see the Archived filter, where you can restore it). Changes notify subscribers (see Notifications) and appear in the banner.</div>
     <div class="table-wrap">
       <table>
         <thead><tr><th>Opportunity</th><th>Funder</th><th>Portfolio</th><th>Status</th><th>Amount</th><th>Prob</th><th>Lead</th><th>Decision</th><th>Theme</th><th></th></tr></thead>
@@ -594,7 +595,8 @@ const SEED_OPPS = [
 ];
 
 // ── STATE ─────────────────────────────────────────────────────────────────────
-let opps = [];
+let opps = [];        // live opportunities (archived ones excluded): everything on the dashboard uses this
+let archivedOpps = []; // archived: kept in the database as the record, shown only under the Archived filter
 let subscribers = [];
 let changelog = [];
 let nextId = 100;
@@ -672,8 +674,9 @@ function setDbStatus(msg, cls) {
 // ── DATA LOADING ──────────────────────────────────────────────────────────────
 async function loadOpps() {
   const data = await sb.get('opportunities?select=*&order=id.asc');
-  opps = data || [];
-  if (opps.length > 0) nextId = Math.max(...opps.map(o => o.id)) + 1;
+  const all = data || [];
+  opps = all.filter(o => !o.archived_at); archivedOpps = all.filter(o => o.archived_at);
+  if (all.length > 0) nextId = Math.max(...all.map(o => o.id)) + 1;
 }
 
 async function loadSubscribers() {
@@ -932,8 +935,9 @@ function setFilter(f, btn) { activeFilter = f; activePortfolioFilter = 'all'; do
 function setPortfolioFilter(f, btn) { activePortfolioFilter = f; activeFilter = 'all'; document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active')); btn.classList.add('active'); renderTable(); }
 function renderTable() {
   const q = (document.getElementById('search-input')?.value || '').toLowerCase();
-  const rows = opps.filter(o => {
-    return (activeFilter === 'all' || o.status === activeFilter) &&
+  const arch = activeFilter === '__archived';
+  const rows = (arch ? archivedOpps : opps).filter(o => {
+    return (activeFilter === 'all' || arch || o.status === activeFilter) &&
            (activePortfolioFilter === 'all' || o.portfolio === activePortfolioFilter) &&
            (!q || o.name.toLowerCase().includes(q) || o.funder.toLowerCase().includes(q) || (o.lead||'').toLowerCase().includes(q) || o.theme.toLowerCase().includes(q));
   });
@@ -951,10 +955,12 @@ function renderTable() {
       <td style="font-size:12px;color:var(--text-secondary);">${o.lead||'—'}${o.support ? `<div style="font-size:11px;color:var(--text-muted);">+ ${o.support}</div>` : ''}</td>
       <td style="font-size:12px;color:var(--text-muted);">${decLabel}</td>
       <td style="font-size:11px;color:var(--text-muted);">${o.theme}</td>
-      <td><button class="btn-sm" title="Remove" style="color:var(--coral-dark);padding:2px 7px;" onclick="deleteOpp(${o.id})">✕</button></td>
+      <td style="white-space:nowrap;">${arch
+        ? `<button class="btn-sm" title="Put back in the active pipeline" onclick="restoreOpp(${o.id})">Restore</button> <button class="btn-sm" title="Delete permanently from the database" style="color:var(--coral-dark);padding:2px 7px;" onclick="deleteOpp(${o.id})">Delete</button>`
+        : `<button class="btn-sm" title="Archive (keeps it in the database; see the Archived filter)" style="padding:2px 7px;" onclick="archiveOpp(${o.id})">Archive</button>`}</td>
     </tr>`;
   }).join('') || '<tr><td colspan="10" style="text-align:center;color:var(--text-muted);padding:1.5rem;">No opportunities match.</td></tr>';
-  const c = document.getElementById('opp-count'); if (c) c.textContent = `${rows.length} of ${opps.length}`;
+  const c = document.getElementById('opp-count'); if (c) c.textContent = arch ? `${rows.length} archived` : `${rows.length} of ${opps.length}`;
 }
 
 // ── ADMIN ─────────────────────────────────────────────────────────────────────
@@ -1003,7 +1009,7 @@ function openModal(id) {
   document.getElementById('modal-title').textContent = id ? 'Edit opportunity' : 'Add opportunity';
   document.getElementById('f-changenote').value = '';
   if (id) {
-    const o = opps.find(x => x.id === id);
+    const o = findOpp(id);
     document.getElementById('f-name').value = o.name;
     document.getElementById('f-funder').value = o.funder;
     document.getElementById('f-portfolio').value = o.portfolio;
@@ -1084,16 +1090,28 @@ async function saveOpp() {
   renderDashboard();
 }
 
+function findOpp(id) { return opps.find(x => x.id === id) || archivedOpps.find(x => x.id === id); }
+async function setArchived(id, on) {
+  const o = findOpp(id); if (!o) return;
+  if (on && !confirm('Archive "' + o.name + '"?\n\nIt leaves the dashboard and the active list but stays in the database. You can restore it from the Archived filter.')) return;
+  const archived_at = on ? new Date().toISOString() : null;
+  if (useSupabase) { const r = await sb.patch('opportunities?id=eq.' + id, { archived_at }); if (r === null) return; await loadOpps(); }
+  else { o.archived_at = archived_at; opps = [...opps, ...archivedOpps].filter(x => !x.archived_at); archivedOpps = [...opps, ...archivedOpps].filter(x => x.archived_at); }
+  const msg = (on ? 'Archived: ' : 'Restored: ') + o.name;
+  await writeChangelog(msg); checkChangelog();
+  renderTable(); renderDashboard(); showToast(on ? 'Archived' : 'Restored');
+}
+const archiveOpp = id => setArchived(id, true), restoreOpp = id => setArchived(id, false);
 async function deleteOpp(id) {
-  const o = opps.find(x => x.id === id);
-  if (!confirm('Remove "' + o.name + '"?')) return;
+  const o = findOpp(id);
+  if (!confirm('Delete "' + o.name + '" permanently?\n\nThis removes it from the database and cannot be undone. To keep it as a record, use Archive instead.')) return;
   const msg = 'Removed: ' + o.name;
   if (useSupabase) {
     const result = await sb.del('opportunities?id=eq.' + id);
     if (result === null) return;
     await loadOpps();
   } else {
-    opps = opps.filter(x => x.id !== id);
+    opps = opps.filter(x => x.id !== id); archivedOpps = archivedOpps.filter(x => x.id !== id);
   }
   await writeChangelog(msg);
   checkChangelog();
