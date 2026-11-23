@@ -117,6 +117,7 @@
   .badge-low { background: #f1efe8; color: #444441; }
 
   /* CLOSED DEALS */
+  #view-opportunities td { padding: 10px 9px; } #view-opportunities th { padding: 10px 9px; }
   .opp-row { cursor:pointer; } .opp-row:hover td { background: var(--surface-alt); }
   .closed-summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 1.25rem; }
   .closed-stat { background: var(--surface-alt); border-radius: var(--radius); padding: 12px 16px; }
@@ -297,10 +298,10 @@
       <span id="opp-count" style="font-size:12px;color:var(--text-muted);margin-left:auto;"></span>
       <button class="btn-primary" onclick="openModal()">+ Add opportunity</button>
     </div>
-    <div style="font-size:12px;color:var(--text-muted);margin:-4px 0 10px;">Click a row to edit it. Changes notify subscribers (see Notifications) and appear in the banner.</div>
+    <div style="font-size:12px;color:var(--text-muted);margin:-4px 0 10px;">Click a row to edit it; ✕ removes it. Changes notify subscribers (see Notifications) and appear in the banner.</div>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>Opportunity</th><th>Funder</th><th>Portfolio</th><th>Status</th><th>Amount</th><th>Prob</th><th>Lead</th><th>Support</th><th>Decision</th><th>Theme</th><th></th></tr></thead>
+        <thead><tr><th>Opportunity</th><th>Funder</th><th>Portfolio</th><th>Status</th><th>Amount</th><th>Prob</th><th>Lead</th><th>Decision</th><th>Theme</th><th></th></tr></thead>
         <tbody id="opp-tbody"></tbody>
       </table>
     </div>
@@ -947,14 +948,12 @@ function renderTable() {
       <td>${statusBadge(o.status)}</td>
       <td>${fmtAmt(o.amount)}</td>
       <td>${probBadge(o.prob)}</td>
-      <td style="font-size:12px;color:var(--text-secondary);">${o.lead||'—'}</td>
-      <td style="font-size:12px;color:var(--text-secondary);">${o.support||'—'}</td>
+      <td style="font-size:12px;color:var(--text-secondary);">${o.lead||'—'}${o.support ? `<div style="font-size:11px;color:var(--text-muted);">+ ${o.support}</div>` : ''}</td>
       <td style="font-size:12px;color:var(--text-muted);">${decLabel}</td>
       <td style="font-size:11px;color:var(--text-muted);">${o.theme}</td>
-      <td style="white-space:nowrap;"><button class="btn-sm" onclick="editOpp(${o.id})">Edit</button>
-        <button class="btn-sm" style="color:var(--coral-dark);margin-left:4px;" onclick="deleteOpp(${o.id})">Remove</button></td>
+      <td><button class="btn-sm" title="Remove" style="color:var(--coral-dark);padding:2px 7px;" onclick="deleteOpp(${o.id})">✕</button></td>
     </tr>`;
-  }).join('') || '<tr><td colspan="11" style="text-align:center;color:var(--text-muted);padding:1.5rem;">No opportunities match.</td></tr>';
+  }).join('') || '<tr><td colspan="10" style="text-align:center;color:var(--text-muted);padding:1.5rem;">No opportunities match.</td></tr>';
   const c = document.getElementById('opp-count'); if (c) c.textContent = `${rows.length} of ${opps.length}`;
 }
 
