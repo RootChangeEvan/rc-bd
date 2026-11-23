@@ -179,6 +179,10 @@
   .rel { display:inline-block; font-size:11px; padding:1px 7px; border-radius:10px; font-weight:600; background:#f1f0ec; color:#555; }
   .rel.current_partner { background:var(--green-light); color:#085041; } .rel.past_partner { background:var(--blue-light); color:var(--blue-dark); }
   .rel.contact { background:var(--amber-light); color:var(--amber-dark); } .rel.competitor { background:var(--red-light); color:var(--red); }
+  .tfit { display:inline-block; min-width:26px; text-align:center; font-size:11.5px; font-weight:700; padding:1px 6px; border-radius:10px; background:#f1f0ec; color:#555; }
+  .tfit.hi { background:var(--green-light); color:#085041; } .tfit.mid { background:var(--blue-light); color:var(--blue-dark); }
+  .achip { display:inline-block; font-size:10.5px; padding:0 6px; border-radius:9px; color:#fff; margin-right:3px; opacity:.9; }
+  .abar { display:flex; align-items:center; gap:8px; font-size:12.5px; margin:3px 0; } .abar .lbl { width:210px; } .abar .trk { flex:1; max-width:160px; height:7px; background:#eeede8; border-radius:4px; overflow:hidden; } .abar .trk i { display:block; height:100%; }
   .pp { padding:7px 0; border-top:1px solid var(--border); } .pp:first-of-type { border-top:none; } .pp .nm { font-weight:600; cursor:pointer; } .pp .nm:hover { color:var(--blue); }
   .award { padding:7px 0; border-top:1px solid var(--border); font-size:12.5px; } .award:first-of-type { border-top:none; }
   .toast { position:fixed; bottom:22px; left:50%; transform:translateX(-50%); background:#1f2328; color:#fff; padding:10px 18px; border-radius:8px; font-size:13px; display:none; z-index:40; }
@@ -281,7 +285,9 @@
   <section class="view" id="v-partners">
     <div class="filters compact">
       <input type="text" id="pf-q" placeholder="Search partners" style="width:190px" oninput="renderPartnerList()">
-      <select id="pf-set" onchange="renderPartnerList()"><option value="wl">Your partners (watchlist)</option><option value="found">Found as past winners</option><option value="">All</option></select>
+      <select id="pf-set" onchange="renderPartnerList()"><option value="fit">Fit our themes (60+)</option><option value="wl">Your partners (watchlist)</option><option value="found">Found by the scanner</option><option value="">All</option></select>
+      <select id="pf-area" onchange="renderPartnerList()"></select>
+      <select id="pf-role" onchange="renderPartnerList()"><option value="">Any role</option></select>
       <span class="count" id="pf-count"></span>
       <button class="btn ghost small" style="margin-left:auto" onclick="addPartner()">+ Add partner</button>
       <button class="btn ghost small" onclick="refreshPartnerAwards()">Refresh award data</button>
@@ -615,12 +621,20 @@ const relPill = r => `<span class="rel ${esc(r)}">${esc(REL[r] || r)}</span>`;
 const mm = n => n == null ? '—' : n >= 1e9 ? '$' + (n/1e9).toFixed(1) + 'B' : n >= 1e6 ? '$' + (n/1e6).toFixed(1) + 'M' : n >= 1e3 ? '$' + Math.round(n/1e3) + 'K' : '$' + Math.round(n);
 const usaidNote = f => /International Development/i.test(f || '') ? ' <span class="sub" title="Most USAID programs were ended or moved to State in 2025; check whether this award is still running.">(USAID: check status)</span>' : '';
 let PARTNERS = [], PSTATS = {}, PCUR = null;
+const FROLE = { prime_to_join:'Prime to join', teaming_peer:'Teaming peer', sub_to_us:'Could sub to us', learning_partner:'Learning partner', competitor:'Competitor', not_relevant:'Outside our themes' };
+const tfitPill = p => p.theme_fit == null ? '<span class="tfit" title="Not scored yet">–</span>' : `<span class="tfit ${p.theme_fit >= 75 ? 'hi' : p.theme_fit >= 60 ? 'mid' : ''}" title="Fit with Root Change's four themes">${p.theme_fit}</span>`;
+const areaChips = p => AREAS.filter(([k]) => (p[k] ?? 0) >= 2).map(([k,l]) => `<span class="achip" style="background:${AREA_COLORS[k]}" title="${esc(l)}: ${p[k] >= 3 ? 'central' : 'substantial'}">${esc(l.split(/[ &]/)[0])}</span>`).join('');
+function initPartnerFilters(){
+  const a = document.getElementById('pf-area'); if (a && !a.options.length) a.innerHTML = '<option value="">Any theme</option>' + AREAS.map(([k,l]) => `<option value="${k}">${esc(l)}</option>`).join('');
+  const r = document.getElementById('pf-role'); if (r && r.options.length < 2) r.innerHTML += Object.entries(FROLE).map(([k,l]) => `<option value="${k}">${esc(l)}</option>`).join('');
+}
+function goPartners(area){ show('partners'); setTimeout(() => { initPartnerFilters(); document.getElementById('pf-set').value = 'fit'; document.getElementById('pf-area').value = area || ''; renderPartnerList(); }, 350); }
 async function loadPartners(){
   const [{ data: ps }, { data: aw }] = await Promise.all([
     db.from('scan_partners').select('*').order('name'),
     db.from('scan_partner_awards').select('partner_id,amount,end_date,funder').limit(5000),
   ]);
-  PARTNERS = ps || []; PSTATS = {};
+  PARTNERS = ps || []; PSTATS = {}; initPartnerFilters();
   const t = new Date().toISOString().slice(0,10), h = new Date(Date.now() + 548*864e5).toISOString().slice(0,10);
   (aw || []).forEach(a => { const s = PSTATS[a.partner_id] ||= { n:0, total:0, active:0, ending:0, funders:{} }; s.n++; s.total += Number(a.amount||0); if (a.end_date >= t) s.active++; if (a.end_date >= t && a.end_date <= h) s.ending++; if (a.funder) s.funders[a.funder] = (s.funders[a.funder]||0) + 1; });
   renderPartnerList();
@@ -628,13 +642,16 @@ async function loadPartners(){
 function renderPartnerList(){
   const q = (document.getElementById('pf-q')?.value || '').toLowerCase(), set = document.getElementById('pf-set')?.value;
   const relOrder = { current_partner:0, past_partner:1, contact:2, none:3, competitor:4 };
-  const rows = PARTNERS.filter(p => (!set || (set === 'wl' ? p.on_watchlist : !p.on_watchlist)) && (!q || (p.name + ' ' + (p.aliases||[]).join(' ')).toLowerCase().includes(q)))
-    .sort((a,b) => (relOrder[a.relationship] - relOrder[b.relationship]) || ((PSTATS[b.id]?.n||0) - (PSTATS[a.id]?.n||0)) || a.name.localeCompare(b.name));
+  const area = document.getElementById('pf-area')?.value, role = document.getElementById('pf-role')?.value;
+  const inSet = p => !set || (set === 'fit' ? (p.theme_fit ?? 0) >= 60 : set === 'wl' ? p.on_watchlist : !p.on_watchlist);
+  const rows = PARTNERS.filter(p => inSet(p) && (!area || (p[area] ?? 0) >= 2) && (!role || p.fit_role === role) && (!q || (p.name + ' ' + (p.aliases||[]).join(' ')).toLowerCase().includes(q)))
+    .sort((a,b) => set === 'wl' ? ((relOrder[a.relationship] - relOrder[b.relationship]) || ((b.theme_fit ?? -1) - (a.theme_fit ?? -1)) || a.name.localeCompare(b.name))
+      : ((b.theme_fit ?? -1) - (a.theme_fit ?? -1)) || ((PSTATS[b.id]?.n||0) - (PSTATS[a.id]?.n||0)) || a.name.localeCompare(b.name));
   document.getElementById('pf-count').textContent = `${rows.length} partners`;
   document.getElementById('partner-list').innerHTML = rows.map(p => { const st = PSTATS[p.id] || {}; const fund = Object.entries(st.funders || {}).sort((a,b) => b[1]-a[1]).slice(0,2).map(f => f[0].replace(/^Department of (the )?/,'')).join(', ');
     return `<div class="li ${PCUR === p.id ? 'sel' : ''}" id="pli-${p.id}" onclick="openPartner('${p.id}')"><div class="body">
-      <div style="display:flex;gap:6px;align-items:center"><div class="ttl" style="flex:1">${ax(p.name)}</div>${relPill(p.relationship)}</div>
-      <div class="meta">${st.n ? `${st.n} federal awards · ${mm(st.total)}${st.active ? ` · ${st.active} active` : ''}${st.ending ? ` · <b>${st.ending} ending ≤18 mo</b>` : ''}` : 'No federal awards found'}${fund ? ' · ' + esc(fund) : ''}</div></div></div>`; }).join('') || '<div class="empty">No partners match.</div>';
+      <div style="display:flex;gap:6px;align-items:center">${tfitPill(p)}<div class="ttl" style="flex:1">${ax(p.name)}</div>${p.relationship && p.relationship !== 'none' ? relPill(p.relationship) : ''}</div>
+      <div class="meta">${areaChips(p)}${p.fit_role ? `<b>${esc(FROLE[p.fit_role] || p.fit_role)}</b> · ` : ''}${st.n ? `${st.n} federal awards · ${mm(st.total)}${st.active ? ` · ${st.active} active` : ''}${st.ending ? ` · <b>${st.ending} ending ≤18 mo</b>` : ''}` : 'No federal awards found'}${fund ? ' · ' + esc(fund) : ''}</div></div></div>`; }).join('') || '<div class="empty">No partners match.</div>';
 }
 async function openPartner(id){
   if (!document.getElementById('v-partners').classList.contains('on')) { show('partners'); await new Promise(r => setTimeout(r, 400)); }
@@ -649,7 +666,14 @@ async function openPartner(id){
   document.getElementById('partner-pane').innerHTML = `
     <h2>${ax(p.name)}</h2>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px">${relPill(p.relationship)} ${p.on_watchlist ? '<span class="rel">★ Watchlist</span>' : ''} ${p.uei ? `<span class="sub">UEI ${esc(p.uei)}</span>` : ''}</div>
-    <div class="kq" style="margin-top:0">
+    <div class="kq" style="margin-top:0;background:#fbfaf7">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><b style="font-size:13.5px">Fit with our themes</b> ${tfitPill(p)} ${p.fit_role ? `<span class="sub">${esc(FROLE[p.fit_role] || p.fit_role)}</span>` : ''}
+        <button class="btn ghost small" style="margin-left:auto" onclick="rescorePartner('${p.id}')">Re-score</button></div>
+      ${p.fit_reason ? `<div style="font-size:13px;margin-bottom:6px">${ax(p.fit_reason)}</div>` : '<div class="sub" style="margin-bottom:6px">Not scored yet.</div>'}
+      ${AREAS.map(([k,l]) => `<div class="abar"><span class="lbl">${esc(l)}</span><span class="trk"><i style="width:${((p[k] ?? 0) / 3) * 100}%;background:${AREA_COLORS[k]}"></i></span><span class="sub">${['none','marginal','substantial','central'][p[k] ?? 0] || ''}</span></div>`).join('')}
+      ${p.theme_hits ? `<div class="sub" style="margin-top:6px">Found through award descriptions mentioning: ${esc([...new Set(Object.entries(p.theme_hits).filter(([k]) => k !== 'checked').flatMap(([, v]) => v.keywords || []))].join(', '))}</div>` : ''}
+      <div class="sub" style="margin-top:4px">Scored by Claude against the four themes, Root Change's capabilities and what the scanner has learned from your feedback${p.assessed_at ? ` · ${fdate(p.assessed_at.slice(0,10))}` : ''}. Your relationship and notes below are used as fact.</div></div>
+    <div class="kq">
       <div class="fbrow"><span>Relationship</span><select id="p-rel">${Object.entries(REL).map(([k,l]) => `<option value="${k}" ${p.relationship===k?'selected':''}>${l}</option>`).join('')}</select>
         <span style="width:auto;margin-left:10px">Type</span><select id="p-type">${['prime','kindred','university','funder','other'].map(k => `<option ${p.org_type===k?'selected':''}>${k}</option>`).join('')}</select>
         <label class="sub" style="margin-left:10px"><input type="checkbox" id="p-wl" ${p.on_watchlist?'checked':''}> on watchlist</label></div>
@@ -675,6 +699,13 @@ async function savePartner(id){
   const { error } = await db.from('scan_partners').update(upd).eq('id', id);
   if (error) return toast('Could not save: ' + error.message);
   toast('Saved'); await loadPartners(); openPartner(id);
+  rescorePartner(id, true);
+}
+async function rescorePartner(id, quiet){
+  if (!quiet) toast('Re-scoring… (about 20 seconds)');
+  try { const { data, error } = await db.functions.invoke('scan-partner-assess', { body: { ids: [id] } }); if (error || !data?.ok) throw new Error(error?.message || data?.error || 'failed'); }
+  catch (e) { if (!quiet) toast('Could not re-score: ' + e.message); return; }
+  await loadPartners(); if (PCUR === id) openPartner(id); if (!quiet) toast('Re-scored');
 }
 async function addPartner(){
   const name = prompt('Partner name (as you know them):'); if (!name) return;
@@ -713,7 +744,7 @@ async function findPartners(id){
 async function loadTeaming(){
   const el = document.getElementById('teaming-list'); if (!el) return;
   const t = new Date().toISOString().slice(0,10), h = new Date(Date.now() + 548*864e5).toISOString().slice(0,10);
-  const { data } = await db.from('scan_partner_awards').select('amount,end_date,funder,funder_sub,description,partner_id,scan_partners!inner(id,name,relationship,on_watchlist,org_type)').eq('scan_partners.on_watchlist', true).in('scan_partners.org_type', ['prime','kindred']).gte('end_date', t).lte('end_date', h).gte('amount', 250000).order('end_date').limit(40);
+  const { data } = await db.from('scan_partner_awards').select('amount,end_date,funder,funder_sub,description,partner_id,scan_partners!inner(id,name,relationship,on_watchlist,org_type,theme_fit,fit_role)').or('theme_fit.gte.70,and(on_watchlist.eq.true,org_type.in.(prime,kindred))', { referencedTable: 'scan_partners' }).or('fit_role.is.null,fit_role.neq.not_relevant', { referencedTable: 'scan_partners' }).gte('end_date', t).lte('end_date', h).gte('amount', 250000).order('end_date').limit(40);
   const rows = (data || []).filter(a => !/International Development/i.test(a.funder || '')).slice(0, 7);
   const usaid = (data || []).filter(a => /International Development/i.test(a.funder || '')).length;
   el.innerHTML = rows.length ? `<ul class="mini">${rows.map(a => `<li onclick="openPartner('${a.scan_partners.id}')"><div class="ttl">${ax(a.scan_partners.name)} · ${ax(a.funder_sub || a.funder || '')}</div><div class="meta">${mm(Number(a.amount))} · ends ${fdate(a.end_date)} · ${esc((a.description || '').slice(0,70))}</div></li>`).join('')}</ul>${usaid ? `<div class="sub" style="margin-top:6px">${usaid} more under USAID not shown; most USAID programs were ended in 2025.</div>` : ''}`
@@ -782,6 +813,8 @@ async function loadDials(){
   const complete = periods.filter(p => data.find(r => r.period_start === p).period_end < today && n(p) >= MIN);
   const cur = complete.at(-1), partial = periods.find(p => p > (cur || '') && data.find(r => r.period_start === p).period_end >= today);
   const openByArea = {};
+  const partnersByArea = {};
+  await Promise.all(AREAS.map(async ([k]) => { const { count } = await db.from('scan_partners').select('id', { count:'exact', head:true }).gte(k, 2).gte('theme_fit', 60); partnersByArea[k] = count; }));
   await Promise.all(AREAS.map(async ([k]) => { const { count } = await db.from('scan_opportunities').select('id,scan_tags!inner(' + k + '),scan_assessments!inner(fit_score)', { count:'exact', head:true }).gte('scan_tags.' + k, 2).gte('scan_assessments.fit_score', FLOOR).in('stage', ['active','upcoming']).eq('is_stale', false).neq('review_status', 'pass'); openByArea[k] = count; }));
   el.innerHTML = AREAS.map(([k, label]) => {
     const rows = data.filter(r => r.area === k);
@@ -797,7 +830,7 @@ async function loadDials(){
     const p = partial ? at(partial) : null;
     return `<div class="dial click" onclick="jump({area:'${k}'})" title="See open opportunities where ${esc(label)} is a substantial part of the work"><h3>${label}</h3>${gauge(v, base, max)}<div class="val">${c ? pct(v) : '—'}</div>
       <div class="trend"><b style="color:${color}">${status}</b>${base != null ? ` vs. ${pct(base)} average before` : ''}</div>
-      <div class="trend">${hist}</div>${p ? `<div class="trend">${periodLabel(partial)} so far: ${pct(Number(p.share))} (${p.records} notices)</div>` : ''}<div class="dial-link">${openByArea[k] ?? 0} open at fit ${FLOOR}+ →</div></div>`;
+      <div class="trend">${hist}</div>${p ? `<div class="trend">${periodLabel(partial)} so far: ${pct(Number(p.share))} (${p.records} notices)</div>` : ''}<div class="dial-link">${openByArea[k] ?? 0} open at fit ${FLOOR}+ →${partnersByArea[k] ? ` <span style="color:var(--muted);font-weight:400">·</span> <span onclick="event.stopPropagation();goPartners('${k}')" title="Partners whose work fits this area">${partnersByArea[k]} partners →</span>` : ''}</div></div>`;
   }).join('');
   document.getElementById('dials-note').innerHTML = cur ? `Click a dial to see open opportunities in that area, across all sources. Needle: ${periodLabel(cur)} (${n(cur)} federal solicitations from Grants.gov and SAM.gov; trends stay federal-only so they compare over time). Black tick = average of earlier periods; green = more than 20% above it, red = more than 20% below. Early periods only include notices that were still listed when the scanner started (Nov 2026), so trends firm up over the next few snapshots. Snapshots refresh every two months.` : 'Not enough tagged solicitations in a completed period yet.';
 }
@@ -1053,12 +1086,13 @@ function renderOppsHeading(area, n, minFit){
   const el = document.getElementById('opps-heading'); if (!el) return;
   const parts = [];
   if (area) { const label = AREAS.find(a => a[0] === area)[1];
-    parts.push({ color: AREA_COLORS[area], title: label, note: `Open opportunities where ${label} is a substantial or central part of the work, across all sources`, clear: `document.getElementById('f-area').value='';loadOpps()` }); }
+    parts.push({ color: AREA_COLORS[area], title: label, note: `Open opportunities where ${label} is a substantial or central part of the work, across all sources`, area, clear: `document.getElementById('f-area').value='';loadOpps()` }); }
   if (FUNDER_FILTER) parts.push({ color: '#0C447C', title: ACRONYMS[FUNDER_FILTER] ? `<abbr title="${esc(ACRONYMS[FUNDER_FILTER])}">${esc(FUNDER_FILTER)}</abbr> <span style="font-weight:400;font-size:14px">${esc(ACRONYMS[FUNDER_FILTER])}</span>` : esc(funderFull(FUNDER_FILTER)), note: 'Open opportunities from this funder', clear: `FUNDER_FILTER=null;loadOpps()`, raw: true });
   if (!parts.length) { el.innerHTML = ''; return; }
   el.innerHTML = parts.map(p => `<div class="ohead" style="border-left-color:${p.color}">
     <div><h2>${p.raw ? p.title : esc(p.title)}</h2><div class="sub">${n} ${n === 1 ? 'opportunity' : 'opportunities'} at fit ${minFit}+ · ${esc(p.note)}</div></div>
-    <button class="btn ghost small" style="margin-left:auto" onclick="${p.clear}">Show all ×</button></div>`).join('');
+    ${p.area ? `<button class="btn ghost small" style="margin-left:auto" onclick="goPartners('${p.area}')">Partners in this area →</button>` : ''}
+    <button class="btn ghost small" style="${p.area ? '' : 'margin-left:auto'}" onclick="${p.clear}">Show all ×</button></div>`).join('');
 }
 
 // ── detail ──
