@@ -276,7 +276,7 @@
       </div>
     </div>
     <div class="card" style="margin-bottom:2rem;">
-      <div class="card-title" id="closed-title">Closed deals</div>
+      <div class="card-title" id="closed-title">Planned</div>
       <div id="closed-section"></div>
     </div>
   </div>
@@ -912,49 +912,24 @@ function renderDashboard() {
     ? calItems.join('')
     : '<div style="font-size:12px;color:var(--text-muted);text-align:center;padding:1.5rem;">No upcoming decisions in the next 90 days</div>';
 
-  // Closed deals section
-  const wonVal = wonOpps.filter(o=>o.amount>0).reduce((a,b)=>a+b.amount,0);
-  const lostOpps = opps.filter(o=>o.status==='Lost');
-  const deferredOpps = opps.filter(o=>o.status==='Deferred');
-  const totalClosed = wonOpps.length + lostOpps.length;
-  const winRate = totalClosed > 0 ? Math.round((wonOpps.length / totalClosed) * 100) : 0;
-
-  document.getElementById('closed-title').textContent = `Closed deals · ${closedOpps.length} total`;
-  if (closedOpps.length === 0) {
-    document.getElementById('closed-section').innerHTML = '<div class="closed-empty">No closed deals yet.</div>';
-  } else {
-    document.getElementById('closed-section').innerHTML = `
-      <div class="closed-summary">
-        <div class="closed-stat">
-          <div class="closed-stat-label">Won</div>
-          <div class="closed-stat-value" style="color:var(--green);">${wonOpps.length}</div>
-          <div class="closed-stat-sub">${fmtAmt(wonVal)} total value</div>
-        </div>
-        <div class="closed-stat">
-          <div class="closed-stat-label">Lost</div>
-          <div class="closed-stat-value" style="color:var(--coral);">${lostOpps.length}</div>
-          <div class="closed-stat-sub">${deferredOpps.length} deferred</div>
-        </div>
-        <div class="closed-stat">
-          <div class="closed-stat-label">Win rate</div>
-          <div class="closed-stat-value">${winRate}%</div>
-          <div class="closed-stat-sub">of decided opportunities</div>
-        </div>
-      </div>
+  // Planned section (replaces the closed-deals list; Won/Lost/Deferred stay in "All opportunities" as the record)
+  const plannedOpps = opps.filter(o => o.status === 'Planned')
+    .sort((a, b) => (a.decision_date || '9999').localeCompare(b.decision_date || '9999') || (b.amount || 0) - (a.amount || 0));
+  const plannedVal = plannedOpps.filter(o=>o.amount>0).reduce((a,b)=>a+b.amount,0);
+  document.getElementById('closed-title').textContent = `Planned · ${plannedOpps.length} opportunities · ${fmtAmt(plannedVal)} known value`;
+  document.getElementById('closed-section').innerHTML = plannedOpps.length ? `
       <div class="closed-list">
-        ${closedOpps.map(o => {
-          const cls = o.status === 'Won' ? 'won' : o.status === 'Lost' ? 'lost' : 'deferred';
+        ${plannedOpps.map(o => {
           const p = portfolioMeta(o.portfolio);
-          return `<div class="closed-item ${cls}">
-            <span class="badge badge-${o.status === 'Won' ? 'won' : 'hold'}">${o.status}</span>
-            <span class="closed-item-name">${o.name}</span>
-            <span class="closed-item-funder">${o.funder}</span>
+          const when = o.decision_date ? new Date(o.decision_date+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : (o.decision_window || '');
+          return `<div class="closed-item" style="border-left-color:${p.color};cursor:pointer" onclick="editOpp(${o.id})" title="Edit">
+            <span class="closed-item-name" style="flex:1 1 45%;min-width:0">${o.name}</span>
+            <span class="closed-item-funder" style="flex:1 1 40%;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${(o.funder||'').replace(/"/g,'&quot;')}">${o.funder}${o.lead ? ' · ' + o.lead : ''}${when ? ' · ' + when : ''}</span>
             <span style="font-size:11px;padding:2px 6px;border-radius:3px;background:${p.light};color:${p.dark};">${o.portfolio}</span>
             <span class="closed-item-amount">${fmtAmt(o.amount)}</span>
           </div>`;
         }).join('')}
-      </div>`;
-  }
+      </div>` : '<div class="closed-empty">No planned opportunities.</div>';
 }
 
 // ── TABLE ─────────────────────────────────────────────────────────────────────
