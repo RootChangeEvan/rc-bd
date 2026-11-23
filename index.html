@@ -117,6 +117,7 @@
   .badge-low { background: #f1efe8; color: #444441; }
 
   /* CLOSED DEALS */
+  .opp-row { cursor:pointer; } .opp-row:hover td { background: var(--surface-alt); }
   .closed-summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 1.25rem; }
   .closed-stat { background: var(--surface-alt); border-radius: var(--radius); padding: 12px 16px; }
   .closed-stat-label { font-size: 11px; color: var(--text-muted); font-weight: 500; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px; }
@@ -236,8 +237,8 @@
   <div class="logo">Root <span>Change</span> · Pipeline</div>
   <nav>
     <button class="active" onclick="showView('dashboard', this)">Dashboard</button>
-    <button onclick="showView('opportunities', this)">All opportunities</button>
-    <button onclick="showView('admin', this)" style="color:var(--amber-dark);">Admin ↗</button>
+    <button onclick="showView('opportunities', this)">Opportunities</button>
+    <button onclick="showView('admin', this)">Notifications</button>
   </nav>
   <div class="header-right">
     <span class="db-status" id="db-status">connecting…</span>
@@ -293,21 +294,19 @@
       <button class="filter-btn" onclick="setFilter('Deferred', this)">Deferred</button>
       <button class="filter-btn" onclick="setPortfolioFilter('Fiscal Sponsorship', this)">Fiscal Sponsorship</button>
       <button class="filter-btn" onclick="setPortfolioFilter('RC Ventures', this)">RC Ventures</button>
+      <span id="opp-count" style="font-size:12px;color:var(--text-muted);margin-left:auto;"></span>
+      <button class="btn-primary" onclick="openModal()">+ Add opportunity</button>
     </div>
+    <div style="font-size:12px;color:var(--text-muted);margin:-4px 0 10px;">Click a row to edit it. Changes notify subscribers (see Notifications) and appear in the banner.</div>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>Opportunity</th><th>Funder</th><th>Portfolio</th><th>Status</th><th>Amount</th><th>Prob</th><th>Lead</th><th>Support</th><th>Decision</th><th>Theme</th></tr></thead>
+        <thead><tr><th>Opportunity</th><th>Funder</th><th>Portfolio</th><th>Status</th><th>Amount</th><th>Prob</th><th>Lead</th><th>Support</th><th>Decision</th><th>Theme</th><th></th></tr></thead>
         <tbody id="opp-tbody"></tbody>
       </table>
     </div>
   </div>
 
   <div id="view-admin" class="view">
-    <div class="admin-bar">
-      <div class="admin-bar-text">⚡ Admin mode — changes notify subscribers and appear in the banner</div>
-      <button class="btn-primary" onclick="openModal()">+ Add opportunity</button>
-    </div>
-
     <div class="sub-section">
       <div class="sub-section-header">
         <h3>Email notifications</h3>
@@ -323,12 +322,7 @@
       </div>
     </div>
 
-    <div class="table-wrap">
-      <table>
-        <thead><tr><th>Opportunity</th><th>Funder</th><th>Portfolio</th><th>Status</th><th>Prob</th><th>Lead</th><th>Support</th><th>Amount</th><th>Decision</th><th>Notes</th><th>Actions</th></tr></thead>
-        <tbody id="admin-tbody"></tbody>
-      </table>
-    </div>
+
   </div>
 
 </div>
@@ -946,9 +940,9 @@ function renderTable() {
     const decLabel = o.decision_date
       ? new Date(o.decision_date+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})
       : (o.decision_window || '—');
-    return `<tr>
-      <td style="font-weight:500;max-width:180px;">${o.name}</td>
-      <td style="color:var(--text-secondary);">${o.funder}</td>
+    return `<tr class="opp-row" onclick="if(!event.target.closest('button'))editOpp(${o.id})" title="Click to edit">
+      <td style="font-weight:500;max-width:240px;">${o.name}${o.notes ? `<div style="font-weight:400;font-size:11px;color:var(--text-muted);margin-top:2px;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">${o.notes}</div>` : ''}</td>
+      <td style="color:var(--text-secondary);max-width:200px;" title="${(o.funder||'').replace(/"/g,'&quot;')}"><div style="overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">${o.funder}</div></td>
       <td>${portfolioBadge(o.portfolio)}</td>
       <td>${statusBadge(o.status)}</td>
       <td>${fmtAmt(o.amount)}</td>
@@ -957,34 +951,15 @@ function renderTable() {
       <td style="font-size:12px;color:var(--text-secondary);">${o.support||'—'}</td>
       <td style="font-size:12px;color:var(--text-muted);">${decLabel}</td>
       <td style="font-size:11px;color:var(--text-muted);">${o.theme}</td>
+      <td style="white-space:nowrap;"><button class="btn-sm" onclick="editOpp(${o.id})">Edit</button>
+        <button class="btn-sm" style="color:var(--coral-dark);margin-left:4px;" onclick="deleteOpp(${o.id})">Remove</button></td>
     </tr>`;
-  }).join('');
+  }).join('') || '<tr><td colspan="11" style="text-align:center;color:var(--text-muted);padding:1.5rem;">No opportunities match.</td></tr>';
+  const c = document.getElementById('opp-count'); if (c) c.textContent = `${rows.length} of ${opps.length}`;
 }
 
 // ── ADMIN ─────────────────────────────────────────────────────────────────────
-function renderAdmin() {
-  document.getElementById('admin-tbody').innerHTML = opps.map(o => {
-    const decLabel = o.decision_date
-      ? new Date(o.decision_date+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})
-      : (o.decision_window || '—');
-    return `<tr>
-      <td style="font-weight:500;max-width:160px;">${o.name}</td>
-      <td style="color:var(--text-secondary);font-size:12px;">${o.funder}</td>
-      <td>${portfolioBadge(o.portfolio)}</td>
-      <td>${statusBadge(o.status)}</td>
-      <td>${probBadge(o.prob)}</td>
-      <td style="font-size:12px;color:var(--text-secondary);">${o.lead||'—'}</td>
-      <td style="font-size:12px;color:var(--text-secondary);max-width:120px;">${o.support||'—'}</td>
-      <td style="font-size:12px;">${fmtAmt(o.amount)}</td>
-      <td style="font-size:12px;color:var(--text-muted);">${decLabel}</td>
-      <td style="color:var(--text-secondary);font-size:12px;max-width:130px;">${o.notes}</td>
-      <td style="white-space:nowrap;">
-        <button class="btn-sm" onclick="editOpp(${o.id})">Edit</button>
-        <button class="btn-sm" style="color:var(--coral-dark);margin-left:4px;" onclick="deleteOpp(${o.id})">Remove</button>
-      </td>
-    </tr>`;
-  }).join('');
-}
+function renderAdmin() { renderTable(); }  // the editable list now lives on the Opportunities tab
 
 function renderSubList(flashEmail) {
   const el = document.getElementById('sub-list');
