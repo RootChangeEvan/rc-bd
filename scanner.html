@@ -375,7 +375,7 @@ function oppCard(o, a, vd){
     <div class="top"><span class="fit ${a.fit_score >= 60 ? 'fit-hi' : 'fit-mid'}">${a.fit_score}</span><div class="ttl" style="flex:1">${ax(o.title)}</div><span data-star="${o.id}">${starBtn(o.id)}</span></div>
     <div class="meta">${ax(agencyShort(o))} · ${esc(SOURCES[o.source_id] || o.source_id)}</div>
     <div class="meta">${esc(a.recommended_role || '')}${val ? ' · ' + money(Number(val)) : ''} · ${dueText(o)}${o.expected_award_date ? ' · ' + awardText(o) : ''}</div>
-    <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">${eligPill(o)} ${fbSummary(vd)}<button class="linkbtn" style="margin-left:auto" onclick="toggleFb('${o.id}', event)">${vd ? 'Edit feedback' : 'Give feedback'}</button></div>
+    <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">${aiPill(o)} ${eligPill(o)} ${fbSummary(vd)}<button class="linkbtn" style="margin-left:auto" onclick="toggleFb('${o.id}', event)">${vd ? 'Edit feedback' : 'Give feedback'}</button></div>
     <div id="fbw-${o.id}" hidden>${fbForm(o.id, a.fit_score, vd)}</div>
   </div>`;
 }
@@ -393,7 +393,11 @@ const ACRONYMS = {
   ROSS:'Resident Opportunity and Self-Sufficiency (HUD)', MEL:'Monitoring, evaluation and learning', NOFO:'Notice of Funding Opportunity', RFI:'Request for Information',
   RFP:'Request for Proposals', RFA:'Request for Applications', BPA:'Blanket Purchase Agreement', SBA:'U.S. Small Business Administration', NAICS:'North American Industry Classification System code',
   CBO:'Community-based organization', STI:'Sexually transmitted infection', OES:"Governor's Office of Emergency Services (California)", FY:'Fiscal year', FFY:'Federal fiscal year',
-  NCETR:'National Center for Explosives Training and Research (DOJ)', TB:'Tuberculosis', PAS:'Public Affairs Section (U.S. embassy)', RCV:'Root Change Ventures, Inc.',
+  NCETR:'National Center for Explosives Training and Research (DOJ)',
+  REOI:'Request for Expression of Interest (World Bank consulting notice)', QCBS:'Quality- and Cost-Based Selection (World Bank)', QBS:'Quality-Based Selection (World Bank)',
+  CQS:"Consultant's Qualification-Based Selection (World Bank)", LCS:'Least-Cost Selection (World Bank)', FBS:'Fixed-Budget Selection (World Bank)',
+  IDA:'International Development Association (World Bank concessional lending arm)', IBRD:'International Bank for Reconstruction and Development (World Bank)',
+  FCDO:'UK Foreign, Commonwealth & Development Office', GIZ:'German development agency (Deutsche Gesellschaft für Internationale Zusammenarbeit)', RFQ:'Request for Quotations', TB:'Tuberculosis', PAS:'Public Affairs Section (U.S. embassy)', RCV:'Root Change Ventures, Inc.',
 };
 const ACR_RE = new RegExp('\\b(' + Object.keys(ACRONYMS).sort((a,b) => b.length - a.length).join('|') + ')\\b', 'g');
 const abbrify = html => String(html).replace(ACR_RE, m => `<abbr title="${esc(ACRONYMS[m])}">${m}</abbr>`);
@@ -403,6 +407,8 @@ const ax = t => abbrify(esc(t));
 function funderKey(o){
   const code = String(o.agency_code || ''), top = String(o.top_level_agency || '').toUpperCase(), name = o.agency_name || '';
   if (o.source_id === 'cagrants') return 'California';
+  if (o.source_id === 'worldbank') return 'World Bank';
+  if (o.source_id === 'foundations') return o.agency_name || 'Foundation';
   if (o.source_id === 'sam') {
     if (/DEFENSE/.test(top)) return /ENGINEER/i.test(name + ' ' + (o.bureau||'')) ? 'USACE' : 'DoD';
     const m = [['HOMELAND','DHS'],['STATE, DEP','State'],['HEALTH AND HUMAN','HHS'],['AGRICULTURE','USDA'],['JUSTICE','DOJ'],['ENERGY','DOE'],['COMMERCE','DOC'],['LABOR','DOL'],['HOUSING','HUD']].find(([k]) => top.includes(k));
@@ -415,7 +421,7 @@ function funderKey(o){
   const pre = code.split('-')[0];
   return { AC:'AmeriCorps', USDA:'USDA', DHS:'DHS', DOL:'DOL', HUD:'HUD', NSF:'NSF', NEH:'NEH', MCC:'MCC', DOE:'DOE' }[pre] || (o.top_level_agency || pre || 'Other');
 }
-const funderFull = k => ACRONYMS[k] || (k === 'State' ? 'U.S. Department of State' : k === 'California' ? 'State of California agencies (California Grants Portal)' : k);
+const funderFull = k => ACRONYMS[k] || (k === 'State' ? 'U.S. Department of State' : k === 'California' ? 'State of California agencies (California Grants Portal)' : k === 'World Bank' ? 'World Bank-financed projects (consulting notices from borrower agencies)' : k);
 let FUNDER_FILTER = null;
 
 // ── watching: in-app alerts on opportunities you follow ──
@@ -612,6 +618,7 @@ function renderFunders(items){
 }
 const stagePill = s => s ? `<span class="pill p-${esc(s)}">${esc(s)}</span>` : '';
 const areaPill = (o, k) => { const t = Array.isArray(o.scan_tags) ? o.scan_tags[0] : o.scan_tags; const v = t ? t[k] : 0; return v >= 2 ? `<span class="apill">${v >= 3 ? 'Central' : 'Substantial'}: ${esc(AREAS.find(a => a[0] === k)[1])}</span>` : ''; };
+const aiPill = o => o.source_id === 'foundations' ? `<span class="pill p-check" title="Found by Claude web research. Confirm the details on the funder's page before acting.">AI-found · confirm</span>` : '';
 const eligPill = o => o.eligibility_flag === 'not_eligible_prime' ? `<span class="pill p-warn" title="${esc(o.set_aside||'')}">Not eligible as prime</span>` : o.eligibility_flag === 'eligible_via_rcv' ? `<span class="pill p-rcv" title="${esc(o.set_aside||'')}">Prime via RC Ventures</span>` : '';
 const reviewPill = r => r && r !== 'new' ? `<span class="pill p-status">${esc({ pass:'passed', reviewing:'considering', pursue:'pursuing', in_pipeline:'in pipeline' }[r] || r)}</span>` : '';
 const fitBadge = a => a && a.fit_score != null ? `<span class="fit ${a.fit_score >= 60 ? 'fit-hi' : a.fit_score >= 40 ? 'fit-mid' : 'fit-lo'}" title="${esc(a.recommended_role || '')}">${a.fit_score}</span><div class="sub">${esc(a.recommended_role || '')}</div>` : '<span class="sub">—</span>';
@@ -905,7 +912,7 @@ async function loadOpps(){
     <div class="body"><div style="display:flex;gap:6px;align-items:flex-start"><div class="ttl" style="flex:1">${ax(o.title)}</div><span data-star="${o.id}">${starBtn(o.id)}</span></div>
       <div class="meta">${ax(agencyShort(o))} · ${esc(SOURCES[o.source_id] || o.source_id)}</div>
       <div class="meta">${dueText(o)}${o.expected_award_date ? ' · ' + awardText(o) : ''}${val ? ' · ' + money(Number(val)) : ''}${geo(o) ? ' · ' + geo(o) : ''}</div>
-      <div style="display:flex;gap:5px;flex-wrap:wrap">${area ? areaPill(o, area) : ''} ${eligPill(o)} ${fbSummary(fbm[o.id])} ${o.review_status === 'in_pipeline' ? '<span class="pill p-ok">in pipeline</span>' : ''}</div></div>
+      <div style="display:flex;gap:5px;flex-wrap:wrap">${area ? areaPill(o, area) : ''} ${aiPill(o)} ${eligPill(o)} ${fbSummary(fbm[o.id])} ${o.review_status === 'in_pipeline' ? '<span class="pill p-ok">in pipeline</span>' : ''}</div></div>
   </div>`; }).join('');
 }
 
