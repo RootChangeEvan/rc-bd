@@ -175,6 +175,12 @@
   .qpill { display:inline-block; font-size:11px; padding:1px 7px; border-radius:10px; background:#f1f0ec; color:#555; margin-left:6px; font-weight:600; }
   .qpill.investigating { background:var(--amber-light); color:var(--amber-dark); } .qpill.answered { background:var(--green-light); color:#085041; } .qpill.failed { background:var(--red-light); color:var(--red); }
   .kq-add { display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; } .kq-add textarea { flex-basis:100%; min-height:52px; font-size:13px; }
+  #partner-pane .fbrow > span { width:auto; min-width:70px; }
+  .rel { display:inline-block; font-size:11px; padding:1px 7px; border-radius:10px; font-weight:600; background:#f1f0ec; color:#555; }
+  .rel.current_partner { background:var(--green-light); color:#085041; } .rel.past_partner { background:var(--blue-light); color:var(--blue-dark); }
+  .rel.contact { background:var(--amber-light); color:var(--amber-dark); } .rel.competitor { background:var(--red-light); color:var(--red); }
+  .pp { padding:7px 0; border-top:1px solid var(--border); } .pp:first-of-type { border-top:none; } .pp .nm { font-weight:600; cursor:pointer; } .pp .nm:hover { color:var(--blue); }
+  .award { padding:7px 0; border-top:1px solid var(--border); font-size:12.5px; } .award:first-of-type { border-top:none; }
   .toast { position:fixed; bottom:22px; left:50%; transform:translateX(-50%); background:#1f2328; color:#fff; padding:10px 18px; border-radius:8px; font-size:13px; display:none; z-index:40; }
   .toast.on { display:block; }
 </style>
@@ -200,6 +206,7 @@
   <nav>
     <button data-v="dash" class="on" onclick="show('dash')">Dashboard</button>
     <button data-v="opps" onclick="show('opps')">Opportunities</button>
+    <button data-v="partners" onclick="show('partners')">Partners</button>
     <button data-v="profiles" onclick="show('profiles')">Profiles</button>
   </nav>
   <div class="hdr-right">
@@ -235,6 +242,7 @@
       <div>
         <div class="panel" id="watch-panel"><h2 style="display:flex;align-items:center;gap:8px">Watching <span class="sub" style="font-weight:400" id="watch-sub"></span><button class="linkbtn" id="watch-seen-all" style="margin-left:auto" onclick="markSeen(null)" hidden>Mark all seen</button></h2><div id="watch-list"></div></div>
         <div class="panel"><h2>Key questions <span class="sub" style="font-weight:400" id="kq-sub"></span></h2><div id="kq-list"></div></div>
+        <div class="panel"><h2>Teaming openings <span class="sub" style="font-weight:400">· your partners' federal awards ending within 18 months</span></h2><div id="teaming-list"></div></div>
         <div class="panel"><h2>Upcoming deadlines <span class="sub" style="font-weight:400">· fit <span class="minfit-label">60</span>+, a week or more out</span></h2><div id="closing-list"></div></div>
         <div class="panel"><h2>Recent changes <span class="sub" style="font-weight:400">· fit <span class="minfit-label">60</span>+</span></h2><div id="changes-list"></div></div>
       </div>
@@ -270,6 +278,20 @@
   </section>
 
   <!-- PROFILES -->
+  <section class="view" id="v-partners">
+    <div class="filters compact">
+      <input type="text" id="pf-q" placeholder="Search partners" style="width:190px" oninput="renderPartnerList()">
+      <select id="pf-set" onchange="renderPartnerList()"><option value="wl">Your partners (watchlist)</option><option value="found">Found as past winners</option><option value="">All</option></select>
+      <span class="count" id="pf-count"></span>
+      <button class="btn ghost small" style="margin-left:auto" onclick="addPartner()">+ Add partner</button>
+      <button class="btn ghost small" onclick="refreshPartnerAwards()">Refresh award data</button>
+    </div>
+    <div class="split">
+      <div class="list" id="partner-list"></div>
+      <div class="pane" id="partner-pane"><div class="empty">Select a partner to see their federal awards, the funders they work with, and opportunities they're linked to.</div></div>
+    </div>
+  </section>
+
   <section class="view" id="v-profiles">
     <div class="panel" id="learn-panel"><h2 style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">What the scanner has learned
         <span class="sub" style="font-weight:400" id="learn-meta"></span>
@@ -587,6 +609,117 @@ async function regenLearn(){
   loadLearn();
 }
 
+// ── partner intelligence ──
+const REL = { current_partner:'Current partner', past_partner:'Past partner', contact:'Contact', none:'No relationship', competitor:'Competitor' };
+const relPill = r => `<span class="rel ${esc(r)}">${esc(REL[r] || r)}</span>`;
+const mm = n => n == null ? '—' : n >= 1e9 ? '$' + (n/1e9).toFixed(1) + 'B' : n >= 1e6 ? '$' + (n/1e6).toFixed(1) + 'M' : n >= 1e3 ? '$' + Math.round(n/1e3) + 'K' : '$' + Math.round(n);
+const usaidNote = f => /International Development/i.test(f || '') ? ' <span class="sub" title="Most USAID programs were ended or moved to State in 2025; check whether this award is still running.">(USAID: check status)</span>' : '';
+let PARTNERS = [], PSTATS = {}, PCUR = null;
+async function loadPartners(){
+  const [{ data: ps }, { data: aw }] = await Promise.all([
+    db.from('scan_partners').select('*').order('name'),
+    db.from('scan_partner_awards').select('partner_id,amount,end_date,funder').limit(5000),
+  ]);
+  PARTNERS = ps || []; PSTATS = {};
+  const t = new Date().toISOString().slice(0,10), h = new Date(Date.now() + 548*864e5).toISOString().slice(0,10);
+  (aw || []).forEach(a => { const s = PSTATS[a.partner_id] ||= { n:0, total:0, active:0, ending:0, funders:{} }; s.n++; s.total += Number(a.amount||0); if (a.end_date >= t) s.active++; if (a.end_date >= t && a.end_date <= h) s.ending++; if (a.funder) s.funders[a.funder] = (s.funders[a.funder]||0) + 1; });
+  renderPartnerList();
+}
+function renderPartnerList(){
+  const q = (document.getElementById('pf-q')?.value || '').toLowerCase(), set = document.getElementById('pf-set')?.value;
+  const relOrder = { current_partner:0, past_partner:1, contact:2, none:3, competitor:4 };
+  const rows = PARTNERS.filter(p => (!set || (set === 'wl' ? p.on_watchlist : !p.on_watchlist)) && (!q || (p.name + ' ' + (p.aliases||[]).join(' ')).toLowerCase().includes(q)))
+    .sort((a,b) => (relOrder[a.relationship] - relOrder[b.relationship]) || ((PSTATS[b.id]?.n||0) - (PSTATS[a.id]?.n||0)) || a.name.localeCompare(b.name));
+  document.getElementById('pf-count').textContent = `${rows.length} partners`;
+  document.getElementById('partner-list').innerHTML = rows.map(p => { const st = PSTATS[p.id] || {}; const fund = Object.entries(st.funders || {}).sort((a,b) => b[1]-a[1]).slice(0,2).map(f => f[0].replace(/^Department of (the )?/,'')).join(', ');
+    return `<div class="li ${PCUR === p.id ? 'sel' : ''}" id="pli-${p.id}" onclick="openPartner('${p.id}')"><div class="body">
+      <div style="display:flex;gap:6px;align-items:center"><div class="ttl" style="flex:1">${ax(p.name)}</div>${relPill(p.relationship)}</div>
+      <div class="meta">${st.n ? `${st.n} federal awards · ${mm(st.total)}${st.active ? ` · ${st.active} active` : ''}${st.ending ? ` · <b>${st.ending} ending ≤18 mo</b>` : ''}` : 'No federal awards found'}${fund ? ' · ' + esc(fund) : ''}</div></div></div>`; }).join('') || '<div class="empty">No partners match.</div>';
+}
+async function openPartner(id){
+  if (!document.getElementById('v-partners').classList.contains('on')) { show('partners'); await new Promise(r => setTimeout(r, 400)); }
+  PCUR = id; document.querySelectorAll('#partner-list .li.sel').forEach(e => e.classList.remove('sel')); document.getElementById('pli-' + id)?.classList.add('sel');
+  const p = PARTNERS.find(x => x.id === id) || (await db.from('scan_partners').select('*').eq('id', id).single()).data;
+  const [{ data: aw }, { data: links }] = await Promise.all([
+    db.from('scan_partner_awards').select('*').eq('partner_id', id).order('end_date', { ascending:false }).limit(200),
+    db.from('scan_opportunity_partners').select('basis,evidence,scan_opportunities(id,title,stage)').eq('partner_id', id).limit(50),
+  ]);
+  const t = new Date().toISOString().slice(0,10);
+  const byF = {}; (aw||[]).forEach(a => { const k = a.funder || 'Unknown'; (byF[k] ||= { n:0, total:0, active:0 }); byF[k].n++; byF[k].total += Number(a.amount||0); if (a.end_date >= t) byF[k].active++; });
+  document.getElementById('partner-pane').innerHTML = `
+    <h2>${ax(p.name)}</h2>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px">${relPill(p.relationship)} ${p.on_watchlist ? '<span class="rel">★ Watchlist</span>' : ''} ${p.uei ? `<span class="sub">UEI ${esc(p.uei)}</span>` : ''}</div>
+    <div class="kq" style="margin-top:0">
+      <div class="fbrow"><span>Relationship</span><select id="p-rel">${Object.entries(REL).map(([k,l]) => `<option value="${k}" ${p.relationship===k?'selected':''}>${l}</option>`).join('')}</select>
+        <span style="width:auto;margin-left:10px">Type</span><select id="p-type">${['prime','kindred','university','funder','other'].map(k => `<option ${p.org_type===k?'selected':''}>${k}</option>`).join('')}</select>
+        <label class="sub" style="margin-left:10px"><input type="checkbox" id="p-wl" ${p.on_watchlist?'checked':''}> on watchlist</label></div>
+      <div class="fbrow" style="margin-top:6px"><span>Search names</span><input type="text" id="p-sn" style="flex:1" value="${esc((p.search_names||[]).join('; '))}" title="Legal names as they appear in federal award data, separated by semicolons"></div>
+      <div style="margin-top:6px"><textarea id="p-notes" style="width:100%;min-height:54px" placeholder="Notes: history with Root Change, contacts, what they're good at…">${esc(p.notes || '')}</textarea></div>
+      <button class="btn small" onclick="savePartner('${p.id}')">Save</button></div>
+    ${(links||[]).length ? `<h3 style="font-size:14px;margin:14px 0 4px">Linked opportunities</h3>${links.map(l => `<div class="award"><a href="#" onclick="event.preventDefault();show('opps');setTimeout(()=>openDetail('${l.scan_opportunities?.id}'),500)">${ax(l.scan_opportunities?.title || '')}</a> <span class="sub">· ${esc(basisText(l))}</span></div>`).join('')}` : ''}
+    <h3 style="font-size:14px;margin:14px 0 4px">Funders they work with <span class="sub" style="font-weight:400">· federal awards, last 5–6 years</span></h3>
+    ${Object.entries(byF).sort((a,b) => b[1].total - a[1].total).map(([f, v]) => `<div class="award"><b>${ax(f)}</b>${usaidNote(f)} · ${v.n} awards · ${mm(v.total)}${v.active ? ` · ${v.active} active` : ''}</div>`).join('') || '<div class="sub">No federal awards found under the search names. Add their legal name(s) above and click "Refresh award data".</div>'}
+    <h3 style="font-size:14px;margin:14px 0 4px">Awards <span class="sub" style="font-weight:400">· latest end date first</span></h3>
+    ${(aw||[]).slice(0,60).map(a => `<div class="award"><div><b>${mm(Number(a.amount))}</b> · ${ax(a.funder_sub || a.funder || '')}${usaidNote(a.funder)} · ${fdate(a.start_date)} – ${fdate(a.end_date)}${a.end_date >= t ? ' <span class="rel current_partner">active</span>' : ''}</div><div class="sub">${esc((a.description || '').slice(0,180))}${a.place ? ' · ' + esc(a.place) : ''} · <a href="${esc(a.url)}" target="_blank" rel="noopener">USAspending ↗</a></div></div>`).join('')}`;
+}
+function basisText(l){
+  const e = l.evidence || {};
+  if (l.basis === 'works_with_funder') return `works with this funder: ${e.awards} awards (${mm(e.total)})${e.same_sub_agency ? `, ${e.same_sub_agency} from the same office` : ''}${e.active_awards ? `, ${e.active_awards} active` : ''}`;
+  if (l.basis === 'won_program') return `won this program ${e.awards}× (${mm(e.total)})${e.latest_end ? `, latest ends ${fdate(e.latest_end)}` : ''}${(e.places||[]).length ? ' · ' + e.places.join(', ') : ''}`;
+  if (l.basis === 'won_similar') return `won ${e.awards} similar contracts (${mm(e.total)})`;
+  return l.basis;
+}
+async function savePartner(id){
+  const upd = { relationship: document.getElementById('p-rel').value, org_type: document.getElementById('p-type').value, on_watchlist: document.getElementById('p-wl').checked,
+    search_names: document.getElementById('p-sn').value.split(';').map(x => x.trim()).filter(Boolean), notes: document.getElementById('p-notes').value.trim() || null, updated_at: new Date().toISOString() };
+  const { error } = await db.from('scan_partners').update(upd).eq('id', id);
+  if (error) return toast('Could not save: ' + error.message);
+  toast('Saved'); await loadPartners(); openPartner(id);
+}
+async function addPartner(){
+  const name = prompt('Partner name (as you know them):'); if (!name) return;
+  const legal = prompt('Legal name as it appears in federal award data (optional; you can add more later):', name.toUpperCase()) || '';
+  const key = name.toLowerCase().replace(/\b(the|inc|incorporated|llc|ltd|limited|corp|corporation|co|company|foundation|fdn)\b/g, ' ').replace(/[^a-z0-9]+/g, ' ').trim().replace(/\s+/g, ' ');
+  const { data, error } = await db.from('scan_partners').insert({ name, name_key: key, search_names: legal ? [legal] : [], on_watchlist: true, relationship: 'contact', org_type: 'kindred' }).select().single();
+  if (error) return toast('Could not add: ' + error.message);
+  toast('Added. Click "Refresh award data" to pull their federal awards.'); await loadPartners(); openPartner(data.id);
+}
+async function refreshPartnerAwards(){
+  toast('Refreshing award data for your watchlist partners (about a minute)…', 5000);
+  try { const r = await fetch(SUPABASE_URL + '/functions/v1/scan-partners', { method:'POST', headers: { 'Content-Type':'application/json', 'apikey': SUPABASE_KEY }, body: JSON.stringify({ mode:'watchlist' }) }); const j = await r.json(); if (!j.ok) throw new Error(j.error); toast(`Updated: ${j.awards} awards across ${j.partners} partners.`); }
+  catch (e) { toast('Could not refresh: ' + e.message, 6000); }
+  loadPartners(); if (PCUR) openPartner(PCUR);
+}
+async function renderOppPartners(o){
+  const el = document.getElementById('op-box'); if (!el) return;
+  const { data } = await db.from('scan_opportunity_partners').select('basis,rank,evidence,scan_partners(id,name,relationship,on_watchlist,org_type)').eq('opportunity_id', o.id).order('rank', { ascending:false });
+  // big universities hold awards from nearly every agency; only show them as "works with this funder" when it's the same office
+  const rows = (data || []).filter(r => !(r.basis === 'works_with_funder' && r.scan_partners.org_type === 'university' && !(r.evidence?.same_sub_agency > 0)));
+  const known = rows.filter(r => r.basis === 'works_with_funder'), winners = rows.filter(r => r.basis !== 'works_with_funder');
+  const line = r => `<div class="pp"><span class="nm" onclick="openPartner('${r.scan_partners.id}')">${ax(r.scan_partners.name)}</span> ${relPill(r.scan_partners.relationship)} ${r.scan_partners.on_watchlist ? '<span class="sub">★</span>' : ''}<div class="sub">${esc(basisText(r))}</div></div>`;
+  const federal = ['grantsgov','sam'].includes(o.source_id);
+  el.innerHTML = `<b style="font-size:13px">Likely partners</b> <span class="sub">· who could help you win this</span>
+    ${known.length ? `<div style="margin-top:6px"><div class="sub" style="font-weight:600">Your partners already working with this funder</div>${known.map(line).join('')}</div>` : ''}
+    ${winners.length ? `<div style="margin-top:8px"><div class="sub" style="font-weight:600">Past winners of this program (last 5 years)</div>${winners.map(line).join('')}</div>` : ''}
+    ${!rows.length ? `<div class="sub" style="margin-top:4px">${o.partners_computed_at ? 'No past winners or partner links found.' : federal ? 'Not looked up yet.' : 'Past-winner data covers U.S. federal awards only.'}</div>` : ''}
+    ${federal ? `<button class="linkbtn" style="margin-top:6px" onclick="findPartners('${o.id}')">${o.partners_computed_at ? 'Refresh' : 'Find partners'}</button>` : ''}`;
+}
+async function findPartners(id){
+  const el = document.getElementById('op-box'); if (el) el.innerHTML = '<span class="sub">Looking up past winners and your partners’ funder history…</span>';
+  try { const r = await fetch(SUPABASE_URL + '/functions/v1/scan-partners', { method:'POST', headers: { 'Content-Type':'application/json', 'apikey': SUPABASE_KEY }, body: JSON.stringify({ mode:'opportunities', ids:[id] }) }); const j = await r.json(); if (!j.ok) throw new Error(j.error); }
+  catch (e) { toast('Could not look up partners: ' + e.message, 6000); }
+  const { data: o } = await db.from('scan_opportunities').select('id,source_id,partners_computed_at').eq('id', id).single(); renderOppPartners(o);
+}
+async function loadTeaming(){
+  const el = document.getElementById('teaming-list'); if (!el) return;
+  const t = new Date().toISOString().slice(0,10), h = new Date(Date.now() + 548*864e5).toISOString().slice(0,10);
+  const { data } = await db.from('scan_partner_awards').select('amount,end_date,funder,funder_sub,description,partner_id,scan_partners!inner(id,name,relationship,on_watchlist,org_type)').eq('scan_partners.on_watchlist', true).in('scan_partners.org_type', ['prime','kindred']).gte('end_date', t).lte('end_date', h).gte('amount', 250000).order('end_date').limit(40);
+  const rows = (data || []).filter(a => !/International Development/i.test(a.funder || '')).slice(0, 7);
+  const usaid = (data || []).filter(a => /International Development/i.test(a.funder || '')).length;
+  el.innerHTML = rows.length ? `<ul class="mini">${rows.map(a => `<li onclick="openPartner('${a.scan_partners.id}')"><div class="ttl">${ax(a.scan_partners.name)} · ${ax(a.funder_sub || a.funder || '')}</div><div class="meta">${mm(Number(a.amount))} · ends ${fdate(a.end_date)} · ${esc((a.description || '').slice(0,70))}</div></li>`).join('')}</ul>${usaid ? `<div class="sub" style="margin-top:6px">${usaid} more under USAID not shown; most USAID programs were ended in 2025.</div>` : ''}`
+    : '<div class="sub">No awards held by your partners end in the next 18 months. Add partners on the Partners tab.</div>';
+}
+
 // ── dashboard visuals ──
 const AREA_COLORS = { networks:'#2a78d6', governance:'#7b5cc4', learning:'#1D9E75', resilience:'#d98a00', other:'#a8a7a2' };
 function mainArea(o){ const t = Array.isArray(o.scan_tags) ? o.scan_tags[0] : o.scan_tags; if (!t) return 'other'; let best = 'other', v = 1; for (const [k] of AREAS) if ((t[k] ?? 0) > v) { v = t[k]; best = k; } return best; }
@@ -789,7 +922,7 @@ async function signOut(){ await db.auth.signOut(); location.reload(); }
 function show(v){
   document.querySelectorAll('nav button').forEach(b => b.classList.toggle('on', b.dataset.v === v));
   document.querySelectorAll('.view').forEach(s => s.classList.toggle('on', s.id === 'v-' + v));
-  if (v === 'opps') loadOpps(); if (v === 'profiles') { renderProfiles(); loadLearn(); } if (v === 'dash') loadDash();
+  if (v === 'opps') loadOpps(); if (v === 'profiles') { renderProfiles(); loadLearn(); } if (v === 'dash') loadDash(); if (v === 'partners') loadPartners();
 }
 let started = false;
 async function init(){
@@ -813,7 +946,7 @@ async function loadDash(){
   RELEVANT = Math.max(FLOOR, mf && !isNaN(Number(mf.value)) ? Number(mf.value) : FLOOR);
   const sel = document.getElementById('min-fit'); if (sel) sel.value = String(RELEVANT);
   document.querySelectorAll('.minfit-label').forEach(e => e.textContent = RELEVANT);
-  loadDials(); loadCalibration(); loadWatchPanel(); loadKQPanel();
+  loadDials(); loadCalibration(); loadWatchPanel(); loadKQPanel(); loadTeaming();
   const { data: vlist } = await db.from('scan_verdicts').select('*');
   const fbmap = Object.fromEntries((vlist||[]).map(x => [x.opportunity_id, x]));
   const now = new Date(), iso = d => new Date(now.getTime() + d*864e5).toISOString();
@@ -956,6 +1089,7 @@ async function openDetail(id){
     </div>
     ${asmt && asmt.fit_score != null ? `<div class="assess" style="padding:10px 14px"><b style="font-size:13px">Your feedback</b> <span class="sub">· trains the scoring</span>${fbForm(o.id, asmt.fit_score, vd)}</div>` : ''}
     <div class="kq" id="kq-box"><span class="sub">Loading questions…</span></div>
+    <div class="kq" id="op-box"><span class="sub">Loading partners…</span></div>
     ${assessBlock(asmt, vd, o.id)}
     <div class="kv">
       <div>Agency</div><div>${agency(o)}</div>
@@ -979,7 +1113,7 @@ async function openDetail(id){
     <h3 style="font-size:14px;margin:18px 0 6px">Change history</h3>
     ${(ch||[]).length ? `<table>${ch.map(c => `<tr><td class="sub" style="white-space:nowrap">${fdate(c.detected_at)}</td><td><b>${esc(c.field)}</b>: ${esc(c.old_value ?? '—')} → ${esc(c.new_value ?? '—')}</td></tr>`).join('')}</table>` : '<div class="sub">No changes since first seen.</div>'}
     <details style="margin-top:18px"><summary class="sub">Original source record</summary><pre style="font-size:11px;white-space:pre-wrap;background:#fafaf8;padding:10px;border-radius:8px">${esc(JSON.stringify(o.raw, null, 2))}</pre></details>`;
-  renderKQ(o.id);
+  renderKQ(o.id); renderOppPartners(o);
   if (usePane) target.scrollTop = 0; else { document.getElementById('shade').classList.add('on'); document.getElementById('drawer').classList.add('on'); }
 }
 function assessBlock(a, vd, oid){
