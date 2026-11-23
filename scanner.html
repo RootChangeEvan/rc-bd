@@ -271,6 +271,11 @@
 
   <!-- PROFILES -->
   <section class="view" id="v-profiles">
+    <div class="panel" id="learn-panel"><h2 style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">What the scanner has learned
+        <span class="sub" style="font-weight:400" id="learn-meta"></span>
+        <span style="margin-left:auto;display:flex;gap:6px"><button class="btn ghost small" id="learn-edit-btn" onclick="editLearn()">Edit</button><button class="btn small" onclick="regenLearn()">Update from my feedback</button></span></h2>
+      <div class="note" style="margin:-4px 0 8px">Distilled from your feedback and your researched key questions. Claude applies these lessons to every score and every investigation. Edit anything that's wrong; your wording wins.</div>
+      <div id="learn-body" class="kq-a" style="margin-top:0"></div></div>
     <div style="display:flex;align-items:center;margin-bottom:12px">
       <div><div style="font-size:18px;font-weight:650">Search profiles</div>
       <div class="sub">Changes apply at the next scan. Enter one item per line.</div></div>
@@ -542,6 +547,40 @@ async function loadKQPanel(){
     : '<div class="sub">Open an opportunity and add a key question, e.g. "what would it take for us to be competitive?" Claude can research it with the full notice, past winners and the web.</div>';
 }
 
+// ── what the scanner has learned (scan_settings.bd_learnings) ──
+let LEARN = { text: '', meta: {} };
+async function loadLearn(){
+  const { data } = await db.from('scan_settings').select('key,value').in('key', ['bd_learnings', 'bd_learnings_meta']);
+  const get = k => (data || []).find(r => r.key === k)?.value;
+  LEARN.text = get('bd_learnings') || ''; try { LEARN.meta = JSON.parse(get('bd_learnings_meta') || '{}'); } catch (_) { LEARN.meta = {}; }
+  const m = LEARN.meta;
+  document.getElementById('learn-meta').textContent = m.generated_at ? `· ${m.edited_by_evan ? 'edited by you ' + ago(m.edited_at) : 'updated ' + ago(m.generated_at)} · from ${m.feedback_used ?? 0} feedback items and ${m.questions_used ?? 0} questions` : '';
+  document.getElementById('learn-body').innerHTML = LEARN.text ? ax2(mdHtml(LEARN.text)) : '<span class="sub">Nothing learned yet. Give feedback or ask key questions, then click "Update from my feedback".</span>';
+  document.getElementById('learn-edit-btn').textContent = 'Edit';
+}
+const ax2 = html => html; // acronym tooltips are applied to plain text only
+function editLearn(){
+  const btn = document.getElementById('learn-edit-btn'), body = document.getElementById('learn-body');
+  if (btn.textContent === 'Save') return saveLearn();
+  body.innerHTML = `<textarea id="learn-text" style="width:100%;min-height:380px;font-family:ui-monospace,Menlo,monospace;font-size:12.5px">${esc(LEARN.text)}</textarea><div class="sub" style="margin-top:4px">Headings start with ###, rules start with "- ". Keep the [basis] notes so you can see where each rule came from.</div>`;
+  btn.textContent = 'Save';
+}
+async function saveLearn(){
+  const text = document.getElementById('learn-text').value.trim();
+  const meta = { ...LEARN.meta, edited_by_evan: true, edited_at: new Date().toISOString() };
+  const { error } = await db.from('scan_settings').upsert([{ key: 'bd_learnings', value: text }, { key: 'bd_learnings_meta', value: JSON.stringify(meta) }], { onConflict: 'key' });
+  if (error) return toast('Could not save: ' + error.message);
+  toast('Saved. New scores will use your version.'); loadLearn();
+}
+async function regenLearn(){
+  if (LEARN.meta.edited_by_evan && !confirm('You have edited these lessons. Updating from your feedback will replace your edits with a fresh summary. Continue?')) return;
+  document.getElementById('learn-body').innerHTML = '<span class="sub">Reading your feedback and questions… (about 30 seconds)</span>';
+  try { const r = await fetch(SUPABASE_URL + '/functions/v1/scan-learn', { method:'POST', headers: { 'Content-Type':'application/json', 'apikey': SUPABASE_KEY }, body: '{}' });
+    const j = await r.json(); if (!j.ok) throw new Error(j.error || 'failed'); toast('Lessons updated. They apply to new scores; ask me to re-score existing ones if you want them refreshed now.', 6000); }
+  catch (e) { toast('Could not update: ' + e.message, 6000); }
+  loadLearn();
+}
+
 // ── dashboard visuals ──
 const AREA_COLORS = { networks:'#2a78d6', governance:'#7b5cc4', learning:'#1D9E75', resilience:'#d98a00', other:'#a8a7a2' };
 function mainArea(o){ const t = Array.isArray(o.scan_tags) ? o.scan_tags[0] : o.scan_tags; if (!t) return 'other'; let best = 'other', v = 1; for (const [k] of AREAS) if ((t[k] ?? 0) > v) { v = t[k]; best = k; } return best; }
@@ -743,7 +782,7 @@ async function signOut(){ await db.auth.signOut(); location.reload(); }
 function show(v){
   document.querySelectorAll('nav button').forEach(b => b.classList.toggle('on', b.dataset.v === v));
   document.querySelectorAll('.view').forEach(s => s.classList.toggle('on', s.id === 'v-' + v));
-  if (v === 'opps') loadOpps(); if (v === 'profiles') renderProfiles(); if (v === 'dash') loadDash();
+  if (v === 'opps') loadOpps(); if (v === 'profiles') { renderProfiles(); loadLearn(); } if (v === 'dash') loadDash();
 }
 let started = false;
 async function init(){
