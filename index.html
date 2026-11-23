@@ -56,6 +56,12 @@
   .kpi-label { font-size: 11px; color: var(--text-muted); font-weight: 500; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 6px; }
   .kpi-value { font-size: 28px; font-weight: 600; letter-spacing: -0.02em; color: var(--text); line-height: 1; }
   .kpi-sub { font-size: 12px; color: var(--text-secondary); margin-top: 4px; }
+  .kpi.hov { position: relative; cursor: default; } .kpi.hov .kpi-label::after { content: ' ⓘ'; font-size: 10px; }
+  .kpi-pop { display: none; position: absolute; top: calc(100% + 6px); left: 0; z-index: 50; width: 380px; max-height: 360px; overflow-y: auto; background: var(--surface); border: 1px solid var(--border-strong); border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.12); padding: 8px 0; }
+  .kpi.hov:hover .kpi-pop, .kpi.hov:focus-within .kpi-pop { display: block; }
+  .kpi-pop .pi { padding: 6px 14px; font-size: 12.5px; line-height: 1.35; border-bottom: 1px solid var(--border); cursor: pointer; } .kpi-pop .pi:last-child { border-bottom: none; } .kpi-pop .pi:hover { background: var(--surface-alt); }
+  .kpi-pop .pm { font-size: 11px; color: var(--text-muted); margin-top: 1px; }
+  .kpi-row .kpi:last-child .kpi-pop { left: auto; right: 0; }
 
   /* PORTFOLIO TILES */
   .portfolio-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 2rem; }
@@ -803,6 +809,10 @@ function renderDashboard() {
   const activeOpps = opps.filter(o => !CLOSED.includes(o.status));
   const closedOpps = opps.filter(o => CLOSED.includes(o.status));
   const wonOpps = opps.filter(o => o.status === 'Won');
+  const wonAll = [...opps, ...archivedOpps].filter(o => o.status === 'Won');  // "all time" includes archived wins
+  const kpiPop = (list, empty) => `<div class="kpi-pop">${list.length ? [...list].sort((a,b) => (b.decision_date||'').localeCompare(a.decision_date||'') || (b.amount||0) - (a.amount||0)).map(o => {
+      const dec = o.decision_date ? new Date(o.decision_date+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : (o.decision_window || '');
+      return `<div class="pi" onclick="editOpp(${o.id})" title="Click to edit"><div>${o.name}</div><div class="pm">${o.funder} · ${fmtAmt(o.amount)}${o.lead ? ' · ' + o.lead : ''}${dec ? ' · ' + (o.status === 'Won' ? '' : 'decision ') + dec : ''}${o.archived_at ? ' · archived' : ''}</div></div>`; }).join('') : `<div class="pi" style="cursor:default">${empty}</div>`}</div>`;
 
   // KPIs — active pipeline only
   const totalVal = activeOpps.filter(o=>o.amount>0).reduce((a,b)=>a+b.amount,0);
@@ -812,8 +822,8 @@ function renderDashboard() {
   document.getElementById('kpi-row').innerHTML = `
     <div class="kpi"><div class="kpi-label">Active pipeline</div><div class="kpi-value">${fmtAmt(totalVal)}</div><div class="kpi-sub">${activeOpps.length} active opportunities</div></div>
     <div class="kpi"><div class="kpi-label">Weighted value</div><div class="kpi-value">${fmtAmt(Math.round(weightedVal))}</div><div class="kpi-sub">prob-adjusted estimate</div></div>
-    <div class="kpi"><div class="kpi-label">Submitted & awaiting</div><div class="kpi-value">${submitted.length}</div><div class="kpi-sub">${fmtAmt(submittedVal)} known value</div></div>
-    <div class="kpi"><div class="kpi-label">Won (all time)</div><div class="kpi-value">${wonOpps.length}</div><div class="kpi-sub">${fmtAmt(wonOpps.filter(o=>o.amount>0).reduce((a,b)=>a+b.amount,0))} closed</div></div>
+    <div class="kpi hov" tabindex="0"><div class="kpi-label">Submitted & awaiting</div><div class="kpi-value">${submitted.length}</div><div class="kpi-sub">${fmtAmt(submittedVal)} known value</div>${kpiPop(submitted, 'Nothing submitted and awaiting a decision.')}</div>
+    <div class="kpi hov" tabindex="0"><div class="kpi-label">Won (all time)</div><div class="kpi-value">${wonAll.length}</div><div class="kpi-sub">${fmtAmt(wonAll.filter(o=>o.amount>0).reduce((a,b)=>a+b.amount,0))} closed</div>${kpiPop(wonAll, 'No wins recorded yet.')}</div>
   `;
 
   // Portfolio tiles — active only
