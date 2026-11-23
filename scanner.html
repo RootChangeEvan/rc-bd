@@ -329,6 +329,8 @@
     <label>Theme</label><select id="pp-theme"><option>Capacity building</option><option>Civic tech / AI</option><option>Climate / environment</option><option>Democracy / governance</option><option>Health equity</option><option>Learning / eval</option><option>Youth / leadership</option><option>Other</option></select>
     <label>Lead</label><select id="pp-lead"><option>Evan</option><option>Aaron</option><option>Beryl</option><option>Devin</option><option>Nikki</option><option>Wadia</option></select>
     <label>Probability</label><select id="pp-prob"><option>Low</option><option>Medium</option><option>High</option></select>
+    <label>Decision date</label><input type="date" id="pp-ddate" title="When the funder is expected to decide; shows under Upcoming decisions on the pipeline dashboard">
+    <label>Decision window</label><input type="text" id="pp-dwin" placeholder="e.g. Apply by Feb 9, 2027 · Rolling · Spring 2027" title="Used on the pipeline dashboard when there's no exact decision date">
     <label>Notes</label><textarea id="pp-notes" rows="4"></textarea>
   </div>
   <div class="actions" style="justify-content:flex-end">
@@ -1200,6 +1202,9 @@ function openPipe(){
   document.getElementById('pp-theme').value = theme;
   document.getElementById('pp-portfolio').value = 'Root Change'; document.getElementById('pp-status').value = 'Planned';
   document.getElementById('pp-lead').value = 'Evan'; document.getElementById('pp-prob').value = 'Low';
+  document.getElementById('pp-ddate').value = o.expected_award_date ? String(o.expected_award_date).slice(0,10) : '';
+  const due = o.deadline || o.forecast_close_date;
+  document.getElementById('pp-dwin').value = o.deadline_rolling ? 'Rolling' : due ? 'Apply by ' + fdate(due) : '';
   document.getElementById('pp-notes').value = `From Opportunity Scanner (${SOURCES[o.source_id]}). Deadline: ${dl}.${o.solicitation_number ? ' Solicitation: ' + o.solicitation_number + '.' : ''}${amount ? '' : ' Amount unknown.'} ${o.source_url || ''}`.trim();
   document.getElementById('pipe-modal').classList.add('on');
 }
@@ -1207,7 +1212,7 @@ function closePipe(){ document.getElementById('pipe-modal').classList.remove('on
 async function savePipe(){
   const g = id => document.getElementById(id).value;
   const btn = document.getElementById('pp-save'); btn.disabled = true;
-  const row = { name: g('pp-name'), funder: g('pp-funder'), portfolio: g('pp-portfolio'), status: g('pp-status'), amount: Math.max(0, Math.round(Number(g('pp-amount')) || 0)), theme: g('pp-theme'), lead: g('pp-lead'), prob: g('pp-prob'), notes: g('pp-notes'), decision_date: null, decision_window: '' };
+  const row = { name: g('pp-name'), funder: g('pp-funder'), portfolio: g('pp-portfolio'), status: g('pp-status'), amount: Math.max(0, Math.round(Number(g('pp-amount')) || 0)), theme: g('pp-theme'), lead: g('pp-lead'), prob: g('pp-prob'), notes: g('pp-notes'), decision_date: g('pp-ddate') || null, decision_window: g('pp-ddate') ? '' : g('pp-dwin').trim() };
   const { data, error } = await db.from('opportunities').insert(row).select('id').single();
   if (error) { btn.disabled = false; return toast('Could not add to pipeline: ' + error.message, 6000); }
   await db.from('scan_opportunities').update({ pipeline_opportunity_id: data.id, review_status: 'in_pipeline', updated_at: new Date().toISOString() }).eq('id', current.id);
