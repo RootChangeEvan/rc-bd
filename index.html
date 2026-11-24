@@ -168,6 +168,8 @@
   .sub-count-badge { font-size: 11px; font-weight: 500; background: var(--blue-light); color: var(--blue-dark); padding: 2px 8px; border-radius: 10px; }
   .sub-section-desc { font-size: 12px; color: var(--text-secondary); margin-bottom: 1.25rem; }
   .sub-add-row { display: flex; gap: 8px; margin-bottom: 1.25rem; }
+  .sub-input { border: 1px solid var(--border-strong); border-radius: var(--radius); padding: 8px 10px; font-size: 13px; font-family: inherit; background: var(--surface); color: var(--text); min-width: 0; }
+  .sub-input:focus { outline: none; border-color: var(--blue); }
   .sub-add-row input { flex: 1; border: 1px solid var(--border-strong); border-radius: var(--radius); padding: 8px 12px; font-size: 13px; font-family: inherit; background: var(--surface); color: var(--text); }
   .sub-add-row input:focus { outline: none; border-color: var(--blue); }
   .sub-add-row input.success { border-color: var(--green); background: var(--green-light); }
@@ -225,7 +227,14 @@
 </style>
 </head>
 <body>
-<div id="rc-login" style="display:none"><h1>BD Pipeline</h1><div style="color:#6b6b68;font-size:13px">Root Change · sign in with your rootchange.org email. We'll email you a one-time code.</div><input type="email" id="rc-email" placeholder="you@rootchange.org" onkeydown="if(event.key==='Enter')rcSendLink()"><button id="rc-btn" onclick="rcSendLink()">Email me a sign-in code</button><div id="rc-code-step" style="display:none;margin-top:16px"><div style="color:#6b6b68;font-size:13px">Enter the code from the email (check spam if it hasn't arrived).</div><input type="text" id="rc-code" inputmode="numeric" autocomplete="one-time-code" placeholder="123456" onkeydown="if(event.key==='Enter')rcVerify()"><button onclick="rcVerify()">Sign in</button></div><div id="rc-msg" style="margin-top:12px;font-size:12px;color:#6b6b68"></div></div>
+<div id="rc-login" style="display:none"><h1>BD Pipeline</h1><div style="color:#6b6b68;font-size:13px">Root Change · sign in with your email and password.</div>
+<form onsubmit="rcSignIn();return false;"><input type="email" id="rc-email" placeholder="you@rootchange.org" autocomplete="username"><input type="password" id="rc-pass" placeholder="Password" autocomplete="current-password"><button id="rc-btn" type="submit">Sign in</button></form>
+<div id="rc-msg" style="margin-top:12px;font-size:12px;color:#6b6b68"></div><div style="margin-top:14px;font-size:12px;color:#9a9893">No account or forgot your password? Ask Evan to set one for you.</div></div>
+<div id="rc-pw-dlg" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.25);z-index:300;align-items:center;justify-content:center"><div style="background:#fff;border-radius:12px;padding:22px;width:360px;font-family:inherit">
+<div style="font-weight:600;margin-bottom:10px">Change your password</div>
+<form onsubmit="rcChangePw();return false;"><input type="password" id="rc-pw1" placeholder="New password (at least 10 characters)" autocomplete="new-password" style="width:100%;padding:9px 11px;margin-bottom:8px;border:1px solid #e3e2de;border-radius:8px;box-sizing:border-box"><input type="password" id="rc-pw2" placeholder="Repeat new password" autocomplete="new-password" style="width:100%;padding:9px 11px;margin-bottom:10px;border:1px solid #e3e2de;border-radius:8px;box-sizing:border-box">
+<div id="rc-pw-msg" style="font-size:12px;color:#b4442a;min-height:16px;margin-bottom:8px"></div>
+<button type="submit" class="btn-primary">Save</button> <button type="button" class="btn-sm" onclick="document.getElementById('rc-pw-dlg').style.display='none'">Cancel</button></form></div></div>
 <div id="rc-app" style="display:none">
 
 <!-- CHANGELOG BANNER -->
@@ -246,11 +255,12 @@
     <button class="active" onclick="showView('dashboard', this)">Dashboard</button>
     <button onclick="showView('opportunities', this)">Opportunities</button>
     <button onclick="showView('admin', this)">Notifications</button>
+    <button id="team-tab" style="display:none" onclick="showView('team', this); loadTeam();">Team</button>
   </nav>
   <div class="header-right">
     <span class="db-status" id="db-status">connecting…</span>
     <div class="header-meta" id="header-meta"></div>
-    <div class="rc-links"><a href="scanner.html">Opportunity Scanner ↗</a><span id="rc-who" style="color:#6b6b68"></span><a href="#" onclick="rcSignOut();return false;">Sign out</a></div>
+    <div class="rc-links"><a href="scanner.html">Opportunity Scanner ↗</a><span id="rc-who" style="color:#6b6b68"></span><a href="#" onclick="rcPwOpen();return false;">Change password</a><a href="#" onclick="rcSignOut();return false;">Sign out</a></div>
   </div>
 </header>
 
@@ -311,6 +321,22 @@
         <thead><tr><th>Opportunity</th><th>Funder</th><th>Portfolio</th><th>Status</th><th>Amount</th><th>Prob</th><th>Lead</th><th>Decision</th><th>Theme</th><th></th></tr></thead>
         <tbody id="opp-tbody"></tbody>
       </table>
+    </div>
+  </div>
+
+  <div id="view-team" class="view">
+    <div class="sub-section">
+      <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:4px"><div class="sub-title">Team access</div><span id="team-count" style="font-size:12px;color:var(--text-muted)"></span></div>
+      <div class="sub-desc">People on this list can sign in to the pipeline and the Opportunity Scanner. Removing someone blocks both straight away; their account is kept and can be restored. Share passwords outside email if you can, and ask people to change theirs after signing in (Change password, top right).</div>
+      <form onsubmit="teamAdd();return false;" style="display:grid;grid-template-columns:1.1fr 1.4fr 1.2fr auto auto;gap:8px;margin:14px 0 18px">
+        <input class="sub-input" id="tm-name" placeholder="Name">
+        <input class="sub-input" id="tm-email" type="email" placeholder="email@rootchange.org" autocomplete="off">
+        <input class="sub-input" id="tm-pass" type="password" placeholder="Password (10+ characters)" autocomplete="new-password">
+        <select class="sub-input" id="tm-role"><option value="member">Member</option><option value="admin">Admin</option></select>
+        <button class="btn-primary" type="submit">+ Add person</button>
+      </form>
+      <div id="team-list"></div>
+      <div id="team-others" style="margin-top:16px"></div>
     </div>
   </div>
 
@@ -476,41 +502,80 @@ const SUPABASE_URL  = 'https://bgnraddjhuoumvyjwgzj.supabase.co';
 const SUPABASE_ANON = 'sb_publishable_kroBXluUVUoSYYbJNugifQ_Hr5cFANt';
 let RC_TOKEN = null;
 const rcAuth = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
-// TEMPORARY (Nov 19, 2026): sign-in switched off; password sign-in returns soon.
-const RC_OPEN_ACCESS = true;
+let RC_ME = null; // { email, role }
 async function rcBoot() {
-  if (RC_OPEN_ACCESS) {
-    document.getElementById('rc-login').style.display = 'none';
-    document.getElementById('rc-app').style.display = 'block';
-    document.querySelectorAll('.rc-links a[onclick]').forEach(a => a.style.display = 'none');
-    init(); return;
-  }
   const { data } = await rcAuth.auth.getSession();
-  rcAuth.auth.onAuthStateChange((_e, s) => { if (s) RC_TOKEN = s.access_token; });
+  rcAuth.auth.onAuthStateChange((_e, s) => { RC_TOKEN = s ? s.access_token : null; });
   const s = data.session;
-  const ok = s && /@rootchange\.org$/i.test(s.user.email || '');
-  if (s && !ok) { await rcAuth.auth.signOut(); document.getElementById('rc-msg').textContent = 'This dashboard is limited to rootchange.org accounts.'; }
-  document.getElementById('rc-login').style.display = ok ? 'none' : 'block';
-  document.getElementById('rc-app').style.display = ok ? 'block' : 'none';
-  if (ok) { RC_TOKEN = s.access_token; document.getElementById('rc-who').textContent = s.user.email; init(); }
+  let me = null;
+  if (s) {
+    RC_TOKEN = s.access_token;
+    const { data: row } = await rcAuth.from('team_members').select('email,role,active').eq('email', (s.user.email || '').toLowerCase()).maybeSingle();
+    if (row && row.active) me = row;
+    else { await rcAuth.auth.signOut(); RC_TOKEN = null; document.getElementById('rc-msg').textContent = 'This account is not on the Root Change team list. Ask Evan for access.'; }
+  }
+  RC_ME = me;
+  document.getElementById('rc-login').style.display = me ? 'none' : 'block';
+  document.getElementById('rc-app').style.display = me ? 'block' : 'none';
+  if (me) { document.getElementById('rc-who').textContent = me.email; document.getElementById('team-tab').style.display = me.role === 'admin' ? '' : 'none'; init(); }
+  else setTimeout(() => document.getElementById('rc-email')?.focus(), 50);
 }
-async function rcSendLink() {
-  const email = document.getElementById('rc-email').value.trim(), msg = document.getElementById('rc-msg');
-  if (!/@rootchange\.org$/i.test(email)) { msg.textContent = 'Please use your rootchange.org email.'; return; }
-  const { error } = await rcAuth.auth.signInWithOtp({ email, options: { emailRedirectTo: location.origin + location.pathname } });
-  if (error) { msg.textContent = 'Could not send the code: ' + error.message; return; }
-  msg.textContent = 'Code sent to ' + email + '.';
-  document.getElementById('rc-code-step').style.display = 'block';
-  document.getElementById('rc-code').focus();
+async function rcSignIn() {
+  const email = document.getElementById('rc-email').value.trim().toLowerCase(), password = document.getElementById('rc-pass').value, msg = document.getElementById('rc-msg');
+  if (!email || !password) { msg.textContent = 'Enter your email and password.'; return; }
+  document.getElementById('rc-btn').disabled = true; msg.textContent = 'Signing in…';
+  const { error } = await rcAuth.auth.signInWithPassword({ email, password });
+  document.getElementById('rc-btn').disabled = false;
+  if (error) { msg.textContent = /invalid/i.test(error.message) ? 'That email and password did not match.' : 'Could not sign in: ' + error.message; return; }
+  msg.textContent = ''; rcBoot();
 }
-async function rcVerify() {
-  const email = document.getElementById('rc-email').value.trim(), msg = document.getElementById('rc-msg');
-  const token = document.getElementById('rc-code').value.replace(/\s/g, '');
-  if (!/^\d{6,10}$/.test(token)) { msg.textContent = 'Enter the numeric code from the email.'; return; }
-  const { error } = await rcAuth.auth.verifyOtp({ email, token, type: 'email' });
-  if (error) { msg.textContent = 'That code did not work (' + error.message + '). Request a new one and use it within a few minutes.'; return; }
-  rcBoot();
+function rcPwOpen() { ['rc-pw1','rc-pw2'].forEach(id => document.getElementById(id).value = ''); document.getElementById('rc-pw-msg').textContent = ''; document.getElementById('rc-pw-dlg').style.display = 'flex'; document.getElementById('rc-pw1').focus(); }
+async function rcChangePw() {
+  const a = document.getElementById('rc-pw1').value, b = document.getElementById('rc-pw2').value, m = document.getElementById('rc-pw-msg');
+  if (a.length < 10) { m.textContent = 'Use at least 10 characters.'; return; }
+  if (a !== b) { m.textContent = 'The two passwords do not match.'; return; }
+  const { error } = await rcAuth.auth.updateUser({ password: a });
+  if (error) { m.textContent = 'Could not change it: ' + error.message; return; }
+  document.getElementById('rc-pw-dlg').style.display = 'none'; showToast('Password changed');
 }
+// ── TEAM (admins) ──
+async function teamCall(body) {
+  const r = await fetch(SUPABASE_URL + '/functions/v1/team-admin', { method: 'POST', headers: { 'Authorization': 'Bearer ' + RC_TOKEN, 'apikey': SUPABASE_ANON, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  let j = {}; try { j = await r.json(); } catch (_) {}
+  if (!r.ok || !j.ok) { showToast('⚠ ' + (j.error || ('Failed (' + r.status + ')'))); return null; }
+  return j;
+}
+const tmEsc = t => String(t ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const tmWhen = d => d ? new Date(d).toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' }) : 'never';
+async function loadTeam() {
+  const j = await teamCall({ action: 'list' }); if (!j) return;
+  const act = j.team.filter(t => t.active).length;
+  document.getElementById('team-count').textContent = `${act} with access`;
+  document.getElementById('team-list').innerHTML = `<div class="table-wrap"><table><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Last sign-in</th><th></th></tr></thead><tbody>${j.team.map(t => `
+    <tr style="${t.active ? '' : 'opacity:.5'}"><td>${tmEsc(t.name || '—')}</td><td>${tmEsc(t.email)}${t.has_account ? '' : ' <span style="font-size:11px;color:var(--coral-dark)">(no account)</span>'}</td>
+    <td>${t.role === 'admin' ? 'Admin' : 'Member'}${t.active ? '' : ' · removed'}</td><td style="font-size:12px;color:var(--text-muted)">${tmWhen(t.last_sign_in_at)}</td>
+    <td style="white-space:nowrap;text-align:right">${t.active ? `<button class="btn-sm" onclick="teamPw('${t.email}')">Set password</button>
+      ${t.email !== RC_ME.email ? `<button class="btn-sm" onclick="teamRole('${t.email}','${t.role === 'admin' ? 'member' : 'admin'}')">${t.role === 'admin' ? 'Make member' : 'Make admin'}</button>
+      <button class="btn-sm" style="color:var(--coral-dark)" onclick="teamRemove('${t.email}')">Remove</button>` : ''}`
+      : `<button class="btn-sm" onclick="teamAct('restore','${t.email}')">Restore</button>`}</td></tr>`).join('')}</tbody></table></div>`;
+  document.getElementById('team-others').innerHTML = j.accounts_not_on_team.length ? `<div class="sub-desc" style="margin-bottom:6px">Accounts that exist but are <b>not</b> on the team (they can't open anything):</div>
+    ${j.accounts_not_on_team.map(o => `<div style="display:flex;gap:10px;align-items:center;font-size:13px;padding:4px 0">${tmEsc(o.email)} <span style="font-size:12px;color:var(--text-muted)">last sign-in ${tmWhen(o.last_sign_in_at)}</span> <button class="btn-sm" onclick="teamAddExisting('${o.email}')">Add to team</button></div>`).join('')}` : '';
+}
+async function teamAdd() {
+  const name = document.getElementById('tm-name').value.trim(), email = document.getElementById('tm-email').value.trim().toLowerCase(), password = document.getElementById('tm-pass').value, role = document.getElementById('tm-role').value;
+  if (!email) { showToast('Enter an email'); return; }
+  const j = await teamCall({ action: 'add', name, email, password, role }); if (!j) return;
+  ['tm-name','tm-email','tm-pass'].forEach(id => document.getElementById(id).value = '');
+  showToast(j.created_account ? `Account created for ${email}` : `${email} added to the team`); loadTeam();
+}
+async function teamAddExisting(email) { const name = prompt('Name for ' + email + ' (optional):', '') ; if (name === null) return; const j = await teamCall({ action: 'add', email, name }); if (j) { showToast(email + ' added to the team'); loadTeam(); } }
+async function teamPw(email) {
+  const p = prompt('New password for ' + email + ' (at least 10 characters).\nTell them outside email, and ask them to change it after signing in.'); if (!p) return;
+  if (await teamCall({ action: 'set_password', email, password: p })) showToast('Password updated for ' + email);
+}
+async function teamRole(email, role) { if (await teamCall({ action: 'set_role', email, role })) loadTeam(); }
+async function teamRemove(email) { if (!confirm('Remove ' + email + ' from the team?\n\nThey will no longer be able to open the pipeline or the scanner. You can restore them later.')) return; teamAct('remove', email); }
+async function teamAct(action, email) { if (await teamCall({ action, email })) { showToast(action === 'remove' ? 'Removed' : 'Restored'); loadTeam(); } }
 async function rcSignOut() { await rcAuth.auth.signOut(); location.reload(); }
 
 // ── SUPABASE CLIENT ───────────────────────────────────────────────────────────

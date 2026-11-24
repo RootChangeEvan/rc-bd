@@ -193,15 +193,12 @@
 
 <div id="login" style="display:none">
   <h1>Opportunity Scanner</h1>
-  <div class="sub">Root Change · sign in with your rootchange.org email. We'll email you a one-time code.</div>
-  <input type="email" id="login-email" placeholder="you@rootchange.org" autocomplete="email" onkeydown="if(event.key==='Enter')sendLink()">
-  <button class="btn" id="login-btn" onclick="sendLink()">Email me a sign-in code</button>
-  <div id="code-step" style="display:none;margin-top:16px">
-    <div class="sub">Enter the code from the email (check spam if it hasn't arrived).</div>
-    <input type="text" id="login-code" inputmode="numeric" autocomplete="one-time-code" placeholder="123456" onkeydown="if(event.key==='Enter')verifyCode()">
-    <button class="btn" id="code-btn" onclick="verifyCode()">Sign in</button>
-  </div>
+  <div class="sub">Root Change · sign in with your email and password.</div>
+  <form onsubmit="signIn();return false;"><input type="email" id="login-email" placeholder="you@rootchange.org" autocomplete="username">
+  <input type="password" id="login-pass" placeholder="Password" autocomplete="current-password">
+  <button class="btn" id="login-btn" type="submit">Sign in</button></form>
   <div id="login-msg" class="note" style="margin-top:12px"></div>
+  <div class="note" style="margin-top:10px">No account or forgot your password? Ask Evan to set one for you. Change your password from the BD pipeline once signed in.</div>
 </div>
 
 <div id="app" style="display:none">
@@ -217,6 +214,7 @@
     <button class="bell" id="bell" onclick="goWatching()" title="Updates on opportunities you watch">🔔 <span id="bell-n" class="bell-n" hidden>0</span></button>
     <a href="./">BD pipeline ↗</a>
     <span id="who"></span>
+    <a href="./#" id="pw-link" title="Change password on the pipeline page (top right)">Change password</a>
     <a href="#" id="signout-link" onclick="signOut();return false;">Sign out</a>
   </div>
 </header>
@@ -566,7 +564,7 @@ async function addQ(oid, go){
   if (go) await investigateQ(data.id, true); else { toast('Question saved'); renderKQ(oid); }
 }
 async function investigateQ(id, quiet){
-  try { const r = await fetch(SUPABASE_URL + '/functions/v1/scan-investigate', { method:'POST', headers: { 'Content-Type':'application/json', 'apikey': SUPABASE_KEY }, body: JSON.stringify({ question_id: id }) });
+  try { const r = await fetch(SUPABASE_URL + '/functions/v1/scan-investigate', { method:'POST', headers: fnHeaders(), body: JSON.stringify({ question_id: id }) });
     const j = await r.json(); if (!j.ok) return toast('Could not start: ' + (j.error || 'unknown error'), 5000); }
   catch (e) { return toast('Could not start: ' + e.message, 5000); }
   toast('Investigating. The answer appears here in about a minute; you can keep working.', 5000);
@@ -611,7 +609,7 @@ async function saveLearn(){
 async function regenLearn(){
   if (LEARN.meta.edited_by_evan && !confirm('You have edited these lessons. Updating from your feedback will replace your edits with a fresh summary. Continue?')) return;
   document.getElementById('learn-body').innerHTML = '<span class="sub">Reading your feedback and questions… (about 30 seconds)</span>';
-  try { const r = await fetch(SUPABASE_URL + '/functions/v1/scan-learn', { method:'POST', headers: { 'Content-Type':'application/json', 'apikey': SUPABASE_KEY }, body: '{}' });
+  try { const r = await fetch(SUPABASE_URL + '/functions/v1/scan-learn', { method:'POST', headers: fnHeaders(), body: '{}' });
     const j = await r.json(); if (!j.ok) throw new Error(j.error || 'failed'); toast('Lessons updated. They apply to new scores; ask me to re-score existing ones if you want them refreshed now.', 6000); }
   catch (e) { toast('Could not update: ' + e.message, 6000); }
   loadLearn();
@@ -719,7 +717,7 @@ async function addPartner(){
 }
 async function refreshPartnerAwards(){
   toast('Refreshing award data for your watchlist partners (about a minute)…', 5000);
-  try { const r = await fetch(SUPABASE_URL + '/functions/v1/scan-partners', { method:'POST', headers: { 'Content-Type':'application/json', 'apikey': SUPABASE_KEY }, body: JSON.stringify({ mode:'watchlist' }) }); const j = await r.json(); if (!j.ok) throw new Error(j.error); toast(`Updated: ${j.awards} awards across ${j.partners} partners.`); }
+  try { const r = await fetch(SUPABASE_URL + '/functions/v1/scan-partners', { method:'POST', headers: fnHeaders(), body: JSON.stringify({ mode:'watchlist' }) }); const j = await r.json(); if (!j.ok) throw new Error(j.error); toast(`Updated: ${j.awards} awards across ${j.partners} partners.`); }
   catch (e) { toast('Could not refresh: ' + e.message, 6000); }
   loadPartners(); if (PCUR) openPartner(PCUR);
 }
@@ -739,7 +737,7 @@ async function renderOppPartners(o){
 }
 async function findPartners(id){
   const el = document.getElementById('op-box'); if (el) el.innerHTML = '<span class="sub">Looking up past winners and your partners’ funder history…</span>';
-  try { const r = await fetch(SUPABASE_URL + '/functions/v1/scan-partners', { method:'POST', headers: { 'Content-Type':'application/json', 'apikey': SUPABASE_KEY }, body: JSON.stringify({ mode:'opportunities', ids:[id] }) }); const j = await r.json(); if (!j.ok) throw new Error(j.error); }
+  try { const r = await fetch(SUPABASE_URL + '/functions/v1/scan-partners', { method:'POST', headers: fnHeaders(), body: JSON.stringify({ mode:'opportunities', ids:[id] }) }); const j = await r.json(); if (!j.ok) throw new Error(j.error); }
   catch (e) { toast('Could not look up partners: ' + e.message, 6000); }
   const { data: o } = await db.from('scan_opportunities').select('id,source_id,partners_computed_at').eq('id', id).single(); renderOppPartners(o);
 }
@@ -907,49 +905,38 @@ async function loadCalibration(){
 const profNames = ids => (ids||[]).map(id => profiles.find(p => p.id === id)?.name).filter(Boolean);
 
 // ── auth ──
-// TEMPORARY (Nov 19, 2026): sign-in switched off; password sign-in returns soon.
-const OPEN_ACCESS = true;
+const fnHeaders = () => ({ 'Content-Type':'application/json', 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + (session?.access_token || '') });
+let teamOk = null; // email of the signed-in team member once checked
 async function boot(){
-  if (OPEN_ACCESS) {
-    document.getElementById('login').style.display = 'none';
-    document.getElementById('app').style.display = 'block';
-    document.getElementById('who').textContent = '';
-    document.getElementById('signout-link').style.display = 'none';
-    init(); return;
-  }
   const { data } = await db.auth.getSession();
   session = data.session;
   db.auth.onAuthStateChange((_e, s) => { const was = !!session; session = s; if (!!s !== was) render(); });
   render();
 }
-function render(){
-  const ok = session && /@rootchange\.org$/i.test(session.user.email || '');
+async function render(){
+  let ok = false;
+  if (session) {
+    const email = (session.user.email || '').toLowerCase();
+    if (teamOk !== email) {
+      const { data: row } = await db.from('team_members').select('email,active').eq('email', email).maybeSingle();
+      if (row && row.active) teamOk = email;
+      else { document.getElementById('login-msg').textContent = 'This account is not on the Root Change team list. Ask Evan for access.'; await db.auth.signOut(); return; }
+    }
+    ok = true;
+  }
   document.getElementById('login').style.display = ok ? 'none' : 'block';
   document.getElementById('app').style.display = ok ? 'block' : 'none';
-  if (session && !ok) { document.getElementById('login-msg').textContent = 'This app is limited to rootchange.org accounts.'; db.auth.signOut(); }
   if (ok) { document.getElementById('who').textContent = session.user.email; init(); }
 }
-async function sendLink(){
-  const email = document.getElementById('login-email').value.trim();
+async function signIn(){
+  const email = document.getElementById('login-email').value.trim().toLowerCase(), password = document.getElementById('login-pass').value;
   const msg = document.getElementById('login-msg');
-  if (!/@rootchange\.org$/i.test(email)) { msg.textContent = 'Please use your rootchange.org email.'; return; }
-  document.getElementById('login-btn').disabled = true;
-  const { error } = await db.auth.signInWithOtp({ email, options: { emailRedirectTo: location.origin + location.pathname } });
+  if (!email || !password) { msg.textContent = 'Enter your email and password.'; return; }
+  document.getElementById('login-btn').disabled = true; msg.textContent = 'Signing in…';
+  const { error } = await db.auth.signInWithPassword({ email, password });
   document.getElementById('login-btn').disabled = false;
-  if (error) { msg.textContent = 'Could not send the code: ' + error.message; return; }
-  msg.textContent = 'Code sent to ' + email + '.';
-  document.getElementById('code-step').style.display = 'block';
-  document.getElementById('login-code').focus();
-}
-async function verifyCode(){
-  const email = document.getElementById('login-email').value.trim();
-  const token = document.getElementById('login-code').value.replace(/\s/g, '');
-  const msg = document.getElementById('login-msg');
-  if (!/^\d{6,10}$/.test(token)) { msg.textContent = 'Enter the numeric code from the email.'; return; }
-  document.getElementById('code-btn').disabled = true;
-  const { error } = await db.auth.verifyOtp({ email, token, type: 'email' });
-  document.getElementById('code-btn').disabled = false;
-  if (error) msg.textContent = 'That code did not work (' + error.message + '). Request a new one and use it within a few minutes.';
+  if (error) { msg.textContent = /invalid/i.test(error.message) ? 'That email and password did not match.' : 'Could not sign in: ' + error.message; return; }
+  msg.textContent = '';
 }
 async function signOut(){ await db.auth.signOut(); location.reload(); }
 
@@ -1037,7 +1024,7 @@ async function scanNow(){
   if (!confirm('Run a scan now? Grants.gov and USAspending take about a minute. SAM.gov uses part of its daily call allowance.')) return;
   b.disabled = true; b.textContent = 'Scanning…';
   try {
-    const r = await fetch(SUPABASE_URL + '/functions/v1/scan-orchestrator', { method:'POST', headers: { 'Authorization':'Bearer ' + (session?.access_token || SUPABASE_KEY), 'apikey': SUPABASE_KEY, 'Content-Type':'application/json' }, body: '{}' });
+    const r = await fetch(SUPABASE_URL + '/functions/v1/scan-orchestrator', { method:'POST', headers: fnHeaders(), body: '{}' });
     const j = await r.json();
     toast(j.ok ? 'Scan finished.' : 'Scan finished with problems — see Source health.', 5000);
   } catch (e) { toast('Scan request failed: ' + e.message, 5000); }
@@ -1172,7 +1159,7 @@ function assessBlock(a, vd, oid){
 async function runAssess(){
   const b = document.getElementById('assess-btn'); if (b) { b.disabled = true; b.textContent = 'Assessing… (about 20 seconds)'; }
   try {
-    const r = await fetch(SUPABASE_URL + '/functions/v1/scan-assess', { method:'POST', headers: { 'Content-Type':'application/json', 'apikey': SUPABASE_KEY }, body: JSON.stringify({ ids: [current.id], force: true }) });
+    const r = await fetch(SUPABASE_URL + '/functions/v1/scan-assess', { method:'POST', headers: fnHeaders(), body: JSON.stringify({ ids: [current.id], force: true }) });
     const j = await r.json(); if (!j.ok) toast('Assessment failed: ' + (j.results?.[0]?.error || j.error || 'unknown error'), 6000);
   } catch (e) { toast('Assessment request failed: ' + e.message, 6000); }
   openDetail(current.id);
